@@ -1,0 +1,56 @@
+completed:
+
+there will be a brand profile creation slider.
+    -> data storing in database and profile completion tracking done.
+
+--partner-with-us -> change the brand name to brand/university/organization name
+                -> remove the sponcership option.
+                -> update database.
+
+--in join wait list page change Join the Waitlist to submit Waitlist
+
+--the admin panel fix
+*when someone signs up or sends a sign up request it should be reflected in the admin panel
+
+
+the brand should also have a tracking system to notify them of approval/rejection or potential changes
+
+
+--update the logo as well
+
+
+when the brands submits a sponcership for review the admin can approve or reject or request some changes in that.
+
+
+
+increase the size of the logo
+
+the doller sign and the sponcership spelling
+
+add the student Waitlist to the admin panel
+
+add a counter that says students signed up live in the home page
+
+admin paned restructuring, 
+    - insight tab - the chart and the total uni and brands 
+    - sponcership counter - on click display approved sponsorships
+    - add the student wait list display 
+
+university panel fix
+ - configure the cards with accepted badge.
+------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
