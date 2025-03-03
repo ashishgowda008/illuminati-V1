@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -16,7 +16,21 @@ import {
   CheckCircle,
   XCircle,
   FileText,
-  ListChecks
+  ListChecks,
+  UserCircle,
+  Upload,
+  Briefcase,
+  MapPin,
+  Globe,
+  Mail,
+  Phone,
+  AlertCircle,
+  Save,
+  Building,
+  Facebook,
+  Twitter,
+  Instagram,
+  Linkedin
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -46,6 +60,29 @@ interface SponsorshipListing {
   brandLogo?: string; // Add this field to store the brand logo
 }
 
+interface UniversityProfile {
+  id?: string;
+  username: string;
+  university_name: string;
+  website?: string | null;
+  location?: string | null;
+  type?: string | null;
+  description?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  social_media?: {
+    facebook?: string;
+    twitter?: string;
+    instagram?: string;
+    linkedin?: string;
+  } | null;
+  address?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  is_complete?: boolean | null;
+  logo?: string | null; // Changed from 'crest' to 'logo'
+}
+
 interface FilterState {
   amount: [number, number];
   category: string;
@@ -58,7 +95,7 @@ interface SponsorshipAcceptance {
   accepted_on: string
 }
 
-type TabType = 'submit' | 'opportunities' | 'status';
+type TabType = 'submit' | 'opportunities' | 'status' | 'profile';
 
 const Sponsorships = () => {
   const navigate = useNavigate();
@@ -74,8 +111,18 @@ const Sponsorships = () => {
   const [sortConfig, setSortConfig] = useState({ key: 'event_date', direction: 'asc' });
   const [acceptedSponsorships, setAcceptedSponsorships] = useState<string[]>([]);
   
+  // Profile state
+  const [profile, setProfile] = useState<UniversityProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileComplete, setProfileComplete] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
   // Active tab state
-  const [activeTab, setActiveTab] = useState<TabType>('opportunities');
+  const [activeTab, setActiveTab] = useState<TabType>('profile');
   
   // Modal state
   const [selectedSponsorship, setSelectedSponsorship] = useState<SponsorshipListing | null>(null);
@@ -101,6 +148,17 @@ const Sponsorships = () => {
     'Conference'
   ];
 
+  const universityTypes = [
+    'Central University',
+    'State University',
+    'Private University',
+    'Deemed University',
+    'Institute of National Importance',
+    'Autonomous College',
+    'Affiliated College',
+    'Other'
+  ];
+
   useEffect(() => {
     console.log("Component mounted with auth status:", { isAuthenticated, username });
     
@@ -110,8 +168,174 @@ const Sponsorships = () => {
       return;
     }
 
+    // Fetch university profile if user is a university
+    if (userType === 'university') {
+      fetchUniversityProfile();
+    }
+
     loadSponsorships();
-  }, [isAuthenticated, username, navigate]);
+  }, [isAuthenticated, username, navigate, userType]);
+
+  const fetchUniversityProfile = async () => {
+    if (!username) return;
+  
+    try {
+      setProfileLoading(true);
+      const { data, error } = await supabase
+        .from('university_profiles')
+        .select('*')
+        .eq('username', username)
+        .single();
+  
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching university profile:', error);
+        return;
+      }
+  
+      if (data) {
+        setProfile(data);
+        setProfileComplete(data.is_complete || false);
+        if (data.logo) { // Check for 'logo' instead of 'crest'
+          setPreviewImage(data.logo);
+        }
+      } else {
+        // Initialize a new profile with the username
+        setProfile({
+          username: username,
+          university_name: '',
+          social_media: {
+            facebook: '',
+            twitter: '',
+            instagram: '',
+            linkedin: ''
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching university profile:', error);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
+    if (name.startsWith('social_media.')) {
+      const socialKey = name.split('.')[1];
+      setProfile(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          social_media: {
+            ...prev.social_media,
+            [socialKey]: value
+          }
+        };
+      });
+    } else {
+      setProfile(prev => {
+        if (!prev) return null;
+        return { ...prev, [name]: value };
+      });
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+  
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileError('Image size should be less than 5MB');
+      return;
+    }
+  
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setPreviewImage(base64String);
+      setProfile(prev => {
+        if (!prev) return null;
+        return { ...prev, logo: base64String }; // Store in 'logo' field instead of 'crest'
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveProfile = async () => {
+    if (!profile || !username) return;
+  
+    // Validate required fields
+    if (!profile.university_name.trim()) {
+      setProfileError('University name is required');
+      return;
+    }
+  
+    try {
+      setProfileSaving(true);
+      setProfileError('');
+      setProfileSuccess(false);
+  
+      console.log("Profile data before sending:", profile);
+  
+      // Create a clean profile object with correct field names
+      const cleanProfileData = {
+        username: profile.username,
+        university_name: profile.university_name,
+        website: profile.website || null,
+        location: profile.location || null,
+        type: profile.type || null,
+        description: profile.description || null,
+        contact_email: profile.contact_email || null,
+        contact_phone: profile.contact_phone || null,
+        social_media: profile.social_media || null,
+        address: profile.address || null,
+        logo: previewImage, // Use the previewImage state which contains the base64 string
+        is_complete: true,
+        updated_at: new Date().toISOString()
+      };
+  
+      console.log("Data being sent to Supabase:", cleanProfileData);
+  
+      // First, check if the university profile already exists
+      const { data: existingProfile, error: fetchError } = await supabase
+        .from('university_profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+  
+      let result;
+  
+      if (existingProfile?.id) {
+        // Update existing profile
+        result = await supabase
+          .from('university_profiles')
+          .update(cleanProfileData)
+          .eq('id', existingProfile.id);
+      } else {
+        // Insert new profile
+        result = await supabase
+          .from('university_profiles')
+          .insert([cleanProfileData]);
+      }
+  
+      console.log("Supabase operation result:", result);
+  
+      if (result.error) {
+        throw result.error;
+      }
+  
+      setProfileComplete(true);
+      setProfileSuccess(true);
+      console.log('Profile saved successfully');
+    } catch (error: any) {
+      console.error('Error saving profile:', error);
+      setProfileError(`Failed to save profile: ${error.message}`);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   // Load accepted sponsorships for the current user
   const loadAcceptedSponsorships = async () => {
@@ -300,6 +524,14 @@ const Sponsorships = () => {
       return;
     }
     
+    // Check if profile is complete for universities
+    if (userType === 'university' && !profileComplete) {
+      setAcceptError("Please complete your profile before accepting sponsorships.");
+      setActiveTab('profile');
+      setShowModal(false);
+      return;
+    }
+    
     try {
       setAcceptLoading(true);
       setAcceptError('');
@@ -428,6 +660,9 @@ const Sponsorships = () => {
     );
   }
 
+  // Profile completeness warning for universities
+  const showProfileWarning = userType === 'university' && !profileComplete && activeTab !== 'profile';
+
   return (
     <div className="min-h-screen pt-16 bg-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -440,39 +675,425 @@ const Sponsorships = () => {
           </p>
         </div>
         
+        {/* Profile Completeness Warning */}
+        {showProfileWarning && (
+          <div className="bg-amber-900/30 border border-amber-500/30 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <AlertCircle className="text-amber-400 w-6 h-6 flex-shrink-0" />
+            <div>
+              <p className="text-amber-400 font-medium">Your profile is incomplete</p>
+              <p className="text-amber-300/80 text-sm mt-1">
+                Complete your university profile to access sponsorship opportunities.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className="ml-auto px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg transition-colors"
+            >
+              Complete Profile
+            </button>
+          </div>
+        )}
+        
         {/* Tab Navigation */}
-        <div className="flex flex-wrap border-b border-neon-green/30 mb-8">
-          <button 
-            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2
-              ${activeTab === 'submit' ? 
-                'bg-neon-green/10 text-neon-green border-b-2 border-neon-green' : 
+        <div className="flex flex-wrap border-b border-neon-green/30 mb-8 overflow-x-auto pb-1">
+          <button
+            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2 whitespace-nowrap
+              ${activeTab === 'profile' ?
+                'bg-neon-green/10 text-neon-green border-b-2 border-neon-green' :
                 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-            onClick={() => setActiveTab('submit')}
+            onClick={() => setActiveTab('profile')}
+          >
+            <UserCircle className="w-5 h-5" />
+            Profile
+          </button>
+          <button
+            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2 whitespace-nowrap
+              ${activeTab === 'submit' ?
+                'bg-neon-green/10 text-neon-green border-b-2 border-neon-green' :
+                'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            onClick={() => !profileComplete && userType === 'university' ? null : setActiveTab('submit')}
+            disabled={!profileComplete && userType === 'university'}
+            style={!profileComplete && userType === 'university' ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
           >
             <FileText className="w-5 h-5" />
             Submit a Sponsorship Request
           </button>
-          <button 
-            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2
-              ${activeTab === 'opportunities' ? 
-                'bg-neon-green/10 text-neon-green border-b-2 border-neon-green' : 
+          <button
+            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2 whitespace-nowrap
+              ${activeTab === 'opportunities' ?
+                'bg-neon-green/10 text-neon-green border-b-2 border-neon-green' :
                 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-            onClick={() => setActiveTab('opportunities')}
+            onClick={() => !profileComplete && userType === 'university' ? null : setActiveTab('opportunities')}
+            disabled={!profileComplete && userType === 'university'}
+            style={!profileComplete && userType === 'university' ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
           >
             <IndianRupee className="w-5 h-5" />
             Sponsorship Opportunities
           </button>
-          <button 
-            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2
-              ${activeTab === 'status' ? 
-                'bg-neon-green/10 text-neon-green border-b-2 border-neon-green' : 
+          <button
+            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2 whitespace-nowrap
+              ${activeTab === 'status' ?
+                'bg-neon-green/10 text-neon-green border-b-2 border-neon-green' :
                 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-            onClick={() => setActiveTab('status')}
+            onClick={() => !profileComplete && userType === 'university' ? null : setActiveTab('status')}
+            disabled={!profileComplete && userType === 'university'}
+            style={!profileComplete && userType === 'university' ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
           >
             <ListChecks className="w-5 h-5" />
             Request Status
           </button>
         </div>
+
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <div className="bg-white/5 backdrop-blur-lg rounded-lg p-8 border border-neon-green/20">
+            {profileLoading ? (
+              <div className="flex justify-center items-center h-48">
+                <div className="text-white">Loading profile...</div>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-white mb-2">University Profile</h2>
+                  <p className="text-gray-300">
+                    Complete your university profile to access sponsorship opportunities.
+                  </p>
+                </div>
+
+                {profileError && (
+                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-6 flex items-center gap-3">
+                    <XCircle className="text-red-500 w-5 h-5 flex-shrink-0" />
+                    <p className="text-red-400">{profileError}</p>
+                  </div>
+                )}
+
+                {profileSuccess && (
+                  <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4 mb-6 flex items-center gap-3">
+                    <CheckCircle className="text-neon-green w-5 h-5 flex-shrink-0" />
+                    <p className="text-neon-green">Profile saved successfully!</p>
+                  </div>
+                )}
+
+                <form className="space-y-8">
+                  {/* Basic Information */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                      <Building className="w-5 h-5" /> Basic Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Username
+                        </label>
+                        <input
+                          type="text"
+                          name="username"
+                          value={profile?.username || ''}
+                          disabled
+                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Username cannot be changed</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1 required">
+                          University Name*
+                        </label>
+                        <input
+                          type="text"
+                          name="university_name"
+                          value={profile?.university_name || ''}
+                          onChange={handleProfileChange}
+                          required
+                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Website
+                        </label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
+                            <Globe className="w-4 h-4" />
+                          </span>
+                          <input
+                            type="url"
+                            name="website"
+                            placeholder="https://www.university.edu"
+                            value={profile?.website || ''}
+                            onChange={handleProfileChange}
+                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
+                        />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          University Type
+                        </label>
+                        <select
+                          name="type"
+                          value={profile?.type || ''}
+                          onChange={handleProfileChange}
+                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
+                        >
+                          <option value="" className="bg-black">Select Type</option>
+                          {universityTypes.map(type => (
+                            <option key={type} value={type} className="bg-black">
+                              {type}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* University Logo Section */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                      <Upload className="w-5 h-5" /> University Logo
+                    </h3>
+                    <div className="flex flex-col md:flex-row gap-6 items-center">
+                      <div className="flex-shrink-0">
+                        {previewImage ? (
+                          <div className="relative">
+                            <img 
+                              src={previewImage} 
+                              alt="University logo" 
+                              className="w-32 h-32 object-contain bg-white/5 border border-neon-green/20 rounded-lg p-2"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPreviewImage(null);
+                                setProfile(prev => prev ? {...prev, logo: null} : null); // Update reference from 'crest' to 'logo'
+                              }}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="w-32 h-32 bg-white/5 border border-neon-green/20 rounded-lg flex items-center justify-center">
+                            <Upload className="w-10 h-10 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-grow">
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleImageUpload}
+                          accept="image/*"
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white hover:bg-white/10 transition-all flex items-center gap-2"
+                        >
+                          <Upload className="w-4 h-4" />
+                          {previewImage ? 'Change Logo' : 'Upload Logo'}
+                        </button>
+                        <p className="text-gray-400 text-sm mt-2">
+                          Upload your university logo. Max size: 5MB. Recommended format: PNG or JPEG with transparent background.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Information */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                      <Phone className="w-5 h-5" /> Contact Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Email Address
+                        </label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
+                            <Mail className="w-4 h-4" />
+                          </span>
+                          <input
+                            type="email"
+                            name="contact_email"
+                            placeholder="contact@university.edu"
+                            value={profile?.contact_email || ''}
+                            onChange={handleProfileChange}
+                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Phone Number
+                        </label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
+                            <Phone className="w-4 h-4" />
+                          </span>
+                          <input
+                            type="tel"
+                            name="contact_phone"
+                            placeholder="+91 XXXXX XXXXX"
+                            value={profile?.contact_phone || ''}
+                            onChange={handleProfileChange}
+                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Address
+                        </label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
+                            <MapPin className="w-4 h-4" />
+                          </span>
+                          <textarea
+                            name="address"
+                            placeholder="Full address of the university"
+                            value={profile?.address || ''}
+                            onChange={handleProfileChange}
+                            rows={3}
+                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Location
+                        </label>
+                        <input
+                          type="text"
+                          name="location"
+                          placeholder="City, State"
+                          value={profile?.location || ''}
+                          onChange={handleProfileChange}
+                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* About */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                      <FileText className="w-5 h-5" /> About University
+                    </h3>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      name="description"
+                      placeholder="Tell us about your university, its achievements, and what makes it unique..."
+                      value={profile?.description || ''}
+                      onChange={handleProfileChange}
+                      rows={5}
+                      className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Social Media */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                      <Globe className="w-5 h-5" /> Social Media
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Facebook
+                        </label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
+                            <Facebook className="w-4 h-4" />
+                          </span>
+                          <input
+                            type="text"
+                            name="social_media.facebook"
+                            placeholder="https://facebook.com/university"
+                            value={profile?.social_media?.facebook || ''}
+                            onChange={handleProfileChange}
+                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Twitter
+                        </label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
+                            <Twitter className="w-4 h-4" />
+                          </span>
+                          <input
+                            type="text"
+                            name="social_media.twitter"
+                            placeholder="https://twitter.com/university"
+                            value={profile?.social_media?.twitter || ''}
+                            onChange={handleProfileChange}
+                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          Instagram
+                        </label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
+                            <Instagram className="w-4 h-4" />
+                          </span>
+                          <input
+                            type="text"
+                            name="social_media.instagram"
+                            placeholder="https://instagram.com/university"
+                            value={profile?.social_media?.instagram || ''}
+                            onChange={handleProfileChange}
+                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
+                          LinkedIn
+                        </label>
+                        <div className="flex">
+                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
+                            <Linkedin className="w-4 h-4" />
+                          </span>
+                          <input
+                            type="text"
+                            name="social_media.linkedin"
+                            placeholder="https://linkedin.com/school/university"
+                            value={profile?.social_media?.linkedin || ''}
+                            onChange={handleProfileChange}
+                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex justify-end pt-4 border-t border-neon-green/20">
+                    <button
+                      type="button"
+                      onClick={saveProfile}
+                      disabled={profileSaving}
+                      className={`flex items-center justify-center gap-2 px-8 py-3 bg-neon-green text-black rounded-lg font-semibold hover:bg-[#00CC00] transition-all ${
+                        profileSaving ? 'opacity-70 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {profileSaving ? 'Saving...' : 'Save Profile'}
+                      {!profileSaving && <Save className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Submit a Sponsorship Request Tab */}
         {activeTab === 'submit' && (
@@ -487,6 +1108,25 @@ const Sponsorships = () => {
         {/* Sponsorship Opportunities Tab - Current Functionality */}
         {activeTab === 'opportunities' && (
           <>
+            {/* Show profile warning if needed */}
+            {userType === 'university' && !profileComplete && (
+              <div className="bg-amber-900/30 border border-amber-500/30 rounded-lg p-4 mb-6 flex items-center gap-3">
+                <AlertCircle className="text-amber-400 w-6 h-6 flex-shrink-0" />
+                <div>
+                  <p className="text-amber-400 font-medium">Complete your profile to unlock sponsorships</p>
+                  <p className="text-amber-300/80 text-sm mt-1">
+                    You need to complete your university profile before you can accept sponsorships.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className="ml-auto px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg transition-colors"
+                >
+                  Complete Now
+                </button>
+              </div>
+            )}
+
             {/* Search and Filters */}
             <div className="mb-8">
               <div className="flex flex-col md:flex-row gap-4 mb-4">
@@ -737,168 +1377,187 @@ const Sponsorships = () => {
                       setSearchTerm('');
                     }}
                     className="mt-4 px-6 py-2 border border-neon-green/20 rounded-lg text-white hover:bg-neon-green/5 transition-all"
-                    >
-                      Reset Filters
-                    </button>
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Sponsorship Request Status Tab */}
+        {activeTab === 'status' && (
+          <div className="bg-white/5 backdrop-blur-lg rounded-lg p-8 border border-neon-green/20">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white mb-4">Sponsorship Request Status</h2>
+              <p className="text-gray-300 mb-6">This feature is coming soon. You'll be able to track the status of your sponsorship requests here.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Sponsorship Detail Modal */}
+        {showModal && selectedSponsorship && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 px-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-gray-900 border border-neon-green/30 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="sticky top-0 bg-gray-900 border-b border-neon-green/20 p-4 flex justify-between items-center">
+                <h2 className="text-xl font-bold text-white">Sponsorship Details</h2>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <div className="mb-6">
+                  {selectedSponsorship.brandLogo && (
+                    <div className="mb-4 flex justify-center">
+                      <img
+                        src={selectedSponsorship.brandLogo}
+                        alt={`${selectedSponsorship.title} brand logo`}
+                        className="w-32 h-32 object-contain rounded-lg bg-white/5 p-3"
+                      />
+                    </div>
+                  )}
+                  <h1 className="text-2xl font-bold text-white mb-2">{selectedSponsorship.title}</h1>
+                  
+                  <div className="flex items-center gap-2 text-neon-green mb-4">
+                    <IndianRupee className="w-6 h-6" />
+                    <span className="text-3xl font-semibold">
+                      {selectedSponsorship.amount.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4">Details</h3>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-gray-400 mb-1">Category</p>
+                        <p className="text-white">{selectedSponsorship.event_category || 'Not specified'}</p>
+                        </div>
+                      
+                      <div>
+                        <p className="text-gray-400 mb-1">Event Date</p>
+                        <p className="text-white">
+                          {selectedSponsorship.event_date ? new Date(selectedSponsorship.event_date).toLocaleDateString() : 'Not specified'}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <p className="text-gray-400 mb-1">Application Deadline</p>
+                        <p className="text-white">
+                          {selectedSponsorship.application_deadline ? (
+                            <>
+                              {new Date(selectedSponsorship.application_deadline).toLocaleDateString()} 
+                              <span className="ml-2 px-2 py-1 bg-neon-green/10 text-neon-green text-xs rounded-full">
+                                {getTimeLeft(selectedSponsorship.application_deadline)}
+                              </span>
+                            </>
+                          ) : 'Not specified'}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <p className="text-gray-400 mb-1">Expected Footfall</p>
+                        <p className="text-white">{selectedSponsorship.expected_footfall?.toLocaleString() || 'Not specified'}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4">Description</h3>
+                    <p className="text-gray-300 whitespace-pre-line">
+                      {selectedSponsorship.description || 'No description provided'}
+                    </p>
+                    
+                    <h3 className="text-lg font-semibold text-white mt-6 mb-4">Requirements</h3>
+                    <p className="text-gray-300 whitespace-pre-line">
+                      {selectedSponsorship.requirements || 'No specific requirements provided'}
+                    </p>
+                    
+                    <h3 className="text-lg font-semibold text-white mt-6 mb-4">Target Criteria</h3>
+                    <p className="text-gray-300 whitespace-pre-line">
+                      {selectedSponsorship.target_criteria || 'No target criteria specified'}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Accept Sponsorship Section */}
+                {userType === 'university' && (
+                  <div className="mt-8 border-t border-neon-green/20 pt-6">
+                    {!profileComplete ? (
+                      <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4 flex items-center gap-3">
+                        <AlertCircle className="text-amber-400 w-6 h-6 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-amber-400 font-medium">Complete your profile first</p>
+                          <p className="text-amber-300/80 text-sm mt-1">
+                            You need to complete your university profile before you can accept sponsorships.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setActiveTab('profile');
+                            setShowModal(false);
+                          }}
+                          className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          Complete Profile
+                        </button>
+                      </div>
+                    ) : alreadyAccepted ? (
+                      <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4 flex items-center gap-3">
+                        <CheckCircle className="text-neon-green w-6 h-6" />
+                        <p className="text-neon-green font-medium">You have already accepted this sponsorship opportunity.</p>
+                      </div>
+                    ) : acceptSuccess ? (
+                      <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4 flex items-center gap-3">
+                        <CheckCircle className="text-neon-green w-6 h-6" />
+                        <p className="text-neon-green font-medium">Sponsorship accepted successfully! The brand will contact you soon.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <h3 className="text-lg font-semibold text-white mb-4">Accept This Sponsorship</h3>
+                        <p className="text-gray-400 mb-4">
+                          By accepting this sponsorship, you agree to the requirements and will be contacted by the brand for further details.
+                        </p>
+                        
+                        {acceptError && (
+                          <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-4 flex items-center gap-3">
+                            <XCircle className="text-red-500 w-6 h-6" />
+                            <p className="text-red-500">{acceptError}</p>
+                          </div>
+                        )}
+                        
+                        <button
+                          onClick={handleAcceptSponsorship}
+                          disabled={acceptLoading}
+                          className={`flex items-center justify-center gap-2 w-full md:w-auto px-8 py-3 bg-neon-green text-black rounded-lg font-semibold hover:bg-[#00CC00] transition-all ${
+                            acceptLoading ? 'opacity-70 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          {acceptLoading ? 'Processing...' : 'Accept Sponsorship'}
+                          {!acceptLoading && <CheckCircle className="w-5 h-5" />}
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
-            </>
-          )}
-  
-          {/* Sponsorship Request Status Tab */}
-          {activeTab === 'status' && (
-            <div className="bg-white/5 backdrop-blur-lg rounded-lg p-8 border border-neon-green/20">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-white mb-4">Sponsorship Request Status</h2>
-                <p className="text-gray-300 mb-6">This feature is coming soon. You'll be able to track the status of your sponsorship requests here.</p>
-              </div>
-            </div>
-          )}
-  
-          {/* Sponsorship Detail Modal */}
-          {showModal && selectedSponsorship && (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 px-4">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-gray-900 border border-neon-green/30 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
-              >
-                <div className="sticky top-0 bg-gray-900 border-b border-neon-green/20 p-4 flex justify-between items-center">
-                  <h2 className="text-xl font-bold text-white">Sponsorship Details</h2>
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-                
-                <div className="p-6">
-                  <div className="mb-6">
-                    {selectedSponsorship.brandLogo && (
-                      <div className="mb-4 flex justify-center">
-                        <img
-                          src={selectedSponsorship.brandLogo}
-                          alt={`${selectedSponsorship.title} brand logo`}
-                          className="w-32 h-32 object-contain rounded-lg bg-white/5 p-3"
-                        />
-                      </div>
-                    )}
-                    <h1 className="text-2xl font-bold text-white mb-2">{selectedSponsorship.title}</h1>
-                    
-                    <div className="flex items-center gap-2 text-neon-green mb-4">
-                      <IndianRupee className="w-6 h-6" />
-                      <span className="text-3xl font-semibold">
-                        {selectedSponsorship.amount.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white mb-4">Details</h3>
-                      
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-gray-400 mb-1">Category</p>
-                          <p className="text-white">{selectedSponsorship.event_category || 'Not specified'}</p>
-                        </div>
-                        
-                        <div>
-                          <p className="text-gray-400 mb-1">Event Date</p>
-                          <p className="text-white">
-                            {selectedSponsorship.event_date ? new Date(selectedSponsorship.event_date).toLocaleDateString() : 'Not specified'}
-                          </p>
-                        </div>
-                        
-                        <div>
-                          <p className="text-gray-400 mb-1">Application Deadline</p>
-                          <p className="text-white">
-                            {selectedSponsorship.application_deadline ? (
-                              <>
-                                {new Date(selectedSponsorship.application_deadline).toLocaleDateString()} 
-                                <span className="ml-2 px-2 py-1 bg-neon-green/10 text-neon-green text-xs rounded-full">
-                                  {getTimeLeft(selectedSponsorship.application_deadline)}
-                                </span>
-                              </>
-                            ) : 'Not specified'}
-                          </p>
-                        </div>
-                        
-                        <div>
-                          <p className="text-gray-400 mb-1">Expected Footfall</p>
-                          <p className="text-white">{selectedSponsorship.expected_footfall?.toLocaleString() || 'Not specified'}</p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-lg font-semibold text-white mb-4">Description</h3>
-                      <p className="text-gray-300 whitespace-pre-line">
-                        {selectedSponsorship.description || 'No description provided'}
-                      </p>
-                      
-                      <h3 className="text-lg font-semibold text-white mt-6 mb-4">Requirements</h3>
-                      <p className="text-gray-300 whitespace-pre-line">
-                        {selectedSponsorship.requirements || 'No specific requirements provided'}
-                      </p>
-                      
-                      <h3 className="text-lg font-semibold text-white mt-6 mb-4">Target Criteria</h3>
-                      <p className="text-gray-300 whitespace-pre-line">
-                        {selectedSponsorship.target_criteria || 'No target criteria specified'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Accept Sponsorship Section */}
-                  {userType === 'university' && (
-                    <div className="mt-8 border-t border-neon-green/20 pt-6">
-                      {alreadyAccepted ? (
-                        <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4 flex items-center gap-3">
-                          <CheckCircle className="text-neon-green w-6 h-6" />
-                          <p className="text-neon-green font-medium">You have already accepted this sponsorship opportunity.</p>
-                        </div>
-                      ) : acceptSuccess ? (
-                        <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4 flex items-center gap-3">
-                          <CheckCircle className="text-neon-green w-6 h-6" />
-                          <p className="text-neon-green font-medium">Sponsorship accepted successfully! The brand will contact you soon.</p>
-                        </div>
-                      ) : (
-                        <>
-                          <h3 className="text-lg font-semibold text-white mb-4">Accept This Sponsorship</h3>
-                          <p className="text-gray-400 mb-4">
-                            By accepting this sponsorship, you agree to the requirements and will be contacted by the brand for further details.
-                          </p>
-                          
-                          {acceptError && (
-                            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-4 flex items-center gap-3">
-                              <XCircle className="text-red-500 w-6 h-6" />
-                              <p className="text-red-500">{acceptError}</p>
-                            </div>
-                          )}
-                          
-                          <button
-                            onClick={handleAcceptSponsorship}
-                            disabled={acceptLoading}
-                            className={`flex items-center justify-center gap-2 w-full md:w-auto px-8 py-3 bg-neon-green text-black rounded-lg font-semibold hover:bg-[#00CC00] transition-all ${
-                              acceptLoading ? 'opacity-70 cursor-not-allowed' : ''
-                            }`}
-                          >
-                            {acceptLoading ? 'Processing...' : 'Accept Sponsorship'}
-                            {!acceptLoading && <CheckCircle className="w-5 h-5" />}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </div>
+            </motion.div>
+          </div>
+        )}
       </div>
-    );
-  };
-  
-  export default Sponsorships;
+    </div>
+  );
+};
+
+export default Sponsorships;

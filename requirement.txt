@@ -42,7 +42,7 @@ university panel fix
 updates:
 
 add max_offerings to brand profile.
-
+added university profile completions tab.
 ------------
 
 
