@@ -87,7 +87,8 @@ const SubmitSponsorship = () => {
       twitter: '',
       instagram: ''
     },
-    billing_address: ''
+    billing_address: '',
+    max_offering: ''
   });
 
   const [sponsorships, setSponsorships] = useState<Array<{
@@ -379,7 +380,8 @@ useEffect(() => {
             twitter: '',
             instagram: ''
           },
-          billing_address: profile.billing_address || ''
+          billing_address: profile.billing_address || '',
+          max_offering: profile.max_offering || ''
         });
         setProfileComplete(profile.is_complete || false);
       }
@@ -430,6 +432,7 @@ useEffect(() => {
           contact_phone: profileData.contact_phone,
           social_media: profileData.social_media,
           billing_address: profileData.billing_address,
+          max_offering: parseFloat(profileData.max_offering) || 0,
           is_complete: true,
           updated_at: new Date().toISOString()
         });
@@ -684,6 +687,25 @@ useEffect(() => {
           placeholder="Describe your company"
           required
         />
+      </div>
+
+      <div>
+        <label htmlFor="max_offering" className="block text-sm font-medium text-gray-300 mb-1">
+          Maximum Sponsorship Offering (₹)
+        </label>
+        <div className="relative">
+          <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            id="max_offering"
+            name="max_offering"
+            type="number"
+            value={profileData.max_offering}
+            onChange={handleProfileChange}
+            className="w-full pl-10 pr-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none focus:ring-1 focus:ring-neon-green/40"
+            placeholder="Enter maximum amount you're willing to offer"
+            required
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

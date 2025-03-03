@@ -38,9 +38,21 @@ admin paned restructuring,
 
 university panel fix
  - configure the cards with accepted badge.
+
+updates:
+
+add max_offerings to brand profile.
+
 ------------
 
 
+
+
+in university page the universities are going to request the sponsorship from a brand.
+only brand names will be visible as a card, on click - details
+
+so when the universities requests for a sponcership it should be displayed in the admin panel first, aand then after approving it should be sent to the brand.
+there should be a approve and display available to check and approve the sponsorship.
 
 
 
