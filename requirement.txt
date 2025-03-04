@@ -45,32 +45,25 @@ add max_offerings to brand profile.
 
 added university profile completions tab.
     - added a new table in the database to store the university profiles.
-    
+
 added university request sponsorship tab and it's functionalities.
     - added a new table in the database to keep track of the request status and changes.
     - added search function in both submit a sponsorship request and request status tab.
 
+added admin confirmation for requested sponsorships in admin panel.
+
+added requested sponsorship tab for brands to approve/reject/request changes 
 
 ------------
 
 
 
 
-in university page the universities are going to request the sponsorship from a brand.
-only brand names will be visible as a card, on click - details
-
-so when the universities requests for a sponcership it should be displayed in the admin panel first, aand then after approving it should be sent to the brand.
-there should be a approve and display available to check and approve the sponsorship.
 
 
 
 
 
-
-
-mode details button under work.
-admin panel changes.
-brand page requests tab creation.
 
 
 

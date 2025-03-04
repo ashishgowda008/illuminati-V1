@@ -5,6 +5,22 @@ import { Rocket, Target, Users } from 'lucide-react';
 const About = () => {
   const particlesRef = useRef<HTMLDivElement>(null);
 
+  // Add this effect to target and style the hamburger menu specifically on the About page
+  useEffect(() => {
+    // Target the hamburger menu button
+    const hamburgerButton = document.querySelector('.md\\:hidden button');
+    
+    if (hamburgerButton) {
+      // Apply the specific styles that make it visible
+      hamburgerButton.setAttribute('style', 'left: -5rem; position: relative;');
+      
+      // Clean up when component unmounts
+      return () => {
+        hamburgerButton.removeAttribute('style');
+      };
+    }
+  }, []);
+
   useEffect(() => {
     const createParticle = () => {
       if (!particlesRef.current) return;
@@ -72,7 +88,7 @@ const About = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-16"
+          className="text-center mb-16 pt-24" // Added pt-24 to account for navbar height
         >
           <h1 className="text-4xl font-bold text-white mb-6 neon-glow">About Illuminatii</h1>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto">

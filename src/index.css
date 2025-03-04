@@ -171,3 +171,43 @@
 .privacy-container strong {
   font-weight: bold;
 }
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;  
+  scrollbar-width: none;  
+}
+
+/* Add this to your CSS file */
+.floating-particles {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* This ensures particles don't capture mouse events */
+  z-index: 5; /* Keep particles below navbar */
+}
+
+.particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: rgba(0, 255, 0, 0.5);
+  border-radius: 50%;
+  animation: float linear;
+  top: 0;
+  pointer-events: none; /* This ensures each particle doesn't capture mouse events */
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(100vh);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(-100px);
+    opacity: 0;
+  }
+}

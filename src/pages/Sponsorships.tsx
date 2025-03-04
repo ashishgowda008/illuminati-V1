@@ -471,7 +471,8 @@ const Sponsorships = () => {
                 address: profile.address || null,
                 logo: previewImage, // Use the previewImage state which contains the base64 string
                 is_complete: true,
-                updated_at: new Date().toISOString()
+                updated_at: new Date().toISOString(),
+                id: localStorage.getItem('userid')
             };
 
             console.log("Data being sent to Supabase:", cleanProfileData);
