@@ -42,7 +42,15 @@ university panel fix
 updates:
 
 add max_offerings to brand profile.
+
 added university profile completions tab.
+    - added a new table in the database to store the university profiles.
+    
+added university request sponsorship tab and it's functionalities.
+    - added a new table in the database to keep track of the request status and changes.
+    - added search function in both submit a sponsorship request and request status tab.
+
+
 ------------
 
 

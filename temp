@@ -1,40 +1,38 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, time } from 'framer-motion';
+import { Bar, BarChart, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Calendar, Search, X, Plus, Clock, ChevronDown, ChevronUp, ExternalLink, Filter, 
-  IndianRupee, Users, CheckCircle, XCircle, FileText, ListChecks, UserCircle, 
-  Upload, Briefcase, MapPin, Globe, Mail, Phone, AlertCircle, Save, Building,
-  Facebook, Twitter, Instagram, Linkedin, Send 
+import {
+  Building2,
+  School,
+  Clock,
+  Activity,
+  BarChart3,
+  Users,
+  ArrowUpRight,
+  ArrowDownRight,
+  Calendar,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Download,
+  RefreshCw,
+  Filter,
+  Search,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
+  Edit,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Key
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
-
-interface BrandProfile {
+interface SponsorshipRequest {
   id: string;
-  username: string;
-  brand_name: string | null;
-  website: string | null;
-  industry: string | null;
-  company_size: string | null;
-  description: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
-  social_media: {
-    facebook?: string;
-    twitter?: string;
-    instagram?: string;
-    linkedin?: string;
-  } | null;
-  billing_address: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-  is_complete: boolean | null;
-  logo: string | null;
-  max_offering: string | null;
-}
-
-interface SponsorshipListing {
-  id: string;
+  user_id: string;
   title: string;
   description: string;
   amount: number;
@@ -44,967 +42,448 @@ interface SponsorshipListing {
   event_category: string;
   expected_footfall: number;
   application_deadline: string;
-  status: string;
-  reviewer_id: string | null;
-  review_date: string | null;
-  feedback: string | null;
+  status: 'pending' | 'approved' | 'rejected';
   created_at: string;
-  updated_at: string;
-  user_id: string | null;
-  isAccepted?: boolean;
-  brandLogo?: string; // Add this field to store the brand logo
+  reviewer_id?: string;
+  review_date?: string;
+  brand_info?: {
+    name: string;
+    industry: string;
+  };
 }
 
-interface UniversityProfile {
-  id?: string;
-  username: string;
-  university_name: string;
-  website?: string | null;
-  location?: string | null;
-  type?: string | null;
-  description?: string | null;
-  contact_email?: string | null;
-  contact_phone?: string | null;
-  social_media?: {
-    facebook?: string;
-    twitter?: string;
-    instagram?: string;
-    linkedin?: string;
-  } | null;
-  address?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-  is_complete?: boolean | null;
-  logo?: string | null; // Changed from 'crest' to 'logo'
-}
-
-interface FilterState {
-  amount: [number, number];
-  category: string;
-  deadline: string;
-}
-
-interface SponsorshipAcceptance {
-  accepted_by: string,
-  acceptance_status: string,
-  accepted_on: string
-}
-
-interface SponsorshipRequest {
+interface ActivityLog {
   id: string;
+  action: string;
   created_at: string;
-  company_id: string;
-  description: string;
-  amount: string;
-  event_date: string;
-  event_category: string;
-  reviewed_by: string | null;
-  reviewer_id: string | null;
-  review_date: string | null;
-  status: string;
-  feedback: string | null;
-  university_id: string;
-  university_name: string;
-  university_url: string | null;
-  brandName?: string; // Added for UI
-  brandLogo?: string; // Added for UI
+  sponsorship_requests?: {
+    title: string;
+  };
 }
 
-type TabType = 'submit' | 'opportunities' | 'status' | 'profile';
+interface Credential {
+  username: string;
+  password: string;
+  user_type: 'university' | 'brand';
+  is_assigned: boolean;
+  assigned_to?: string;
+  last_used?: string;
+  created_at: string;
+}
 
-const Sponsorships = () => {
+const Admin = () => {
   const navigate = useNavigate();
-  const userType = localStorage.getItem('userType');
-  const username = localStorage.getItem('username');
-  const userId = localStorage.getItem('username');
-  const userid = localStorage.getItem('userid');
-  const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
-  const [sponsorships, setSponsorships] = useState<SponsorshipListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  interface DashboardStats {
+    totalBrands: number;
+    totalUniversities: number;
+    pendingRequests: number;
+    totalSponshorships: number;
+    studentWaitlist: StudentWaitlist[];
+    growthStats: {
+      brands: number;
+      universities: number;
+      sponsorships: number;
+    }
+  }
+
+  const [stats, setStats] = useState<DashboardStats>({
+    totalBrands: 0,
+    totalUniversities: 0,
+    pendingRequests: 0,
+    totalSponshorships: 0,
+    studentWaitlist: [],
+    growthStats: {
+      brands: 0,
+      universities: 0,
+      sponsorships: 0
+    }
+  });
+  const [showStudentWaitlistModal, setShowStudentWaitlistModal] = useState(false);
+  const [showApprovedSponsorshipsModal, setShowApprovedSponsorshipsModal] = useState(false);
+  const [showInsightsModal, setShowInsightsModal] = useState(false);
+  const [approvedSponsorships, setApprovedSponsorships] = useState<SponsorshipRequest[]>([]);
+  const [insightsData, setInsightsData] = useState<{
+    signups: { date: string; count: number }[];
+    totalUniversities: number;
+    totalBrands: number;
+    universities: any[];
+    brands: any[];
+  }>({
+    signups: [],
+    totalUniversities: 0,
+    totalBrands: 0,
+    universities: [],
+    brands: []
+  });
+  const [showUniversitiesModal, setShowUniversitiesModal] = useState(false);
+  const [showBrandsModal, setShowBrandsModal] = useState(false);
+  
+  interface StudentWaitlist {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    university: string;
+    created_at: string;
+  }
+  const [sponsorshipRequests, setSponsorshipRequests] = useState<SponsorshipRequest[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [selectedRequest, setSelectedRequest] = useState<SponsorshipRequest | null>(null);
+  const [showPendingRequestsModal, setShowPendingRequestsModal] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<SponsorshipRequest[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [sortConfig, setSortConfig] = useState({ key: 'event_date', direction: 'asc' });
-  const [acceptedSponsorships, setAcceptedSponsorships] = useState<string[]>([]);
-
-  // Profile state
-  const [profile, setProfile] = useState<UniversityProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [profileComplete, setProfileComplete] = useState(false);
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileError, setProfileError] = useState('');
-  const [profileSuccess, setProfileSuccess] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-
-  // Request history state for Status tab
-  const [requestHistory, setRequestHistory] = useState<SponsorshipRequest[]>([]);
-  const [requestHistoryLoading, setRequestHistoryLoading] = useState(false);
-  const [requestHistoryError, setRequestHistoryError] = useState('');
-
-  // Brand profiles state for Submit tab
-  const [brandProfiles, setBrandProfiles] = useState<BrandProfile[]>([]);
-  const [brandsLoading, setBrandsLoading] = useState(false);
-  const [brandsError, setBrandsError] = useState('');
-
-  // Active tab state
-  const [activeTab, setActiveTab] = useState<TabType>('profile');
-
-  // Modal state
-  const [selectedSponsorship, setSelectedSponsorship] = useState<SponsorshipListing | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [acceptLoading, setAcceptLoading] = useState(false);
-  const [acceptSuccess, setAcceptSuccess] = useState(false);
-  const [acceptError, setAcceptError] = useState('');
-  const [alreadyAccepted, setAlreadyAccepted] = useState(false);
-
-  const [filters, setFilters] = useState<FilterState>({
-    amount: [100, 500000],
-    category: 'all',
-    deadline: 'all'
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState({
+    key: 'created_at',
+    direction: 'desc'
   });
 
-  const categories = [
-    'Tech Fest',
-    'Cultural Fest',
-    'Sports Meet',
-    'Business Summit',
-    'Hackathon',
-    'Workshop Series',
-    'Conference'
-  ];
-
-  const universityTypes = [
-    'Central University',
-    'State University',
-    'Private University',
-    'Deemed University',
-    'Institute of National Importance',
-    'Autonomous College',
-    'Affiliated College',
-    'Other'
-  ];
-
-  // For the request form modal
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
-  const [selectedBrandName, setSelectedBrandName] = useState<string | null>(null);
-  const [requestFormData, setRequestFormData] = useState({
-    description: '',
-    amount: '',
-    event_date: '',
-    event_category: ''
-  });
-  const [requestSubmitting, setRequestSubmitting] = useState(false);
-  const [requestError, setRequestError] = useState('');
-  const [requestSuccess, setRequestSuccess] = useState(false);
-
-  // Add this useEffect to handle body scroll locking when the modal is open
-  useEffect(() => {
-    if (showRequestModal || showModal) {
-      // Disable scrolling on the body when any modal is open
-      document.body.style.overflow = 'hidden';
-      return () => {
-        // Re-enable scrolling when component unmounts or modal closes
-        document.body.style.overflow = 'auto';
-      };
-    } else {
-      // Make sure scrolling is enabled when modals are closed
-      document.body.style.overflow = 'auto';
-    }
-  }, [showRequestModal, showModal]);
+  // Credentials management state
+  const [credentials, setCredentials] = useState<Credential[]>([]);
+  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+  const [credentialFilter, setCredentialFilter] = useState('all');
+  const [credentialSearch, setCredentialSearch] = useState('');
+  const [copiedItem, setCopiedItem] = useState<{id: string, type: 'username' | 'password'} | null>(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log("Component mounted with auth status:", { isAuthenticated, username });
-    if (!isAuthenticated || !username) {
-      console.log("Redirecting to signin due to missing auth");
-      navigate('/signin');
-      return;
-    }
+    loadDashboardData();
+    loadCredentials();
+  }, []);
 
-    // Fetch university profile if user is a university
-    if (userType === 'university') {
-      fetchUniversityProfile();
-    }
-    loadSponsorships();
-  }, [isAuthenticated, username, navigate, userType]);
-
-  // Fetch brand profiles when the submit tab is active
-  useEffect(() => {
-    if (activeTab === 'submit') {
-      fetchBrandProfiles();
-    } else if (activeTab === 'status') {
-      fetchRequestHistory();
-    }
-  }, [activeTab]);
-
-  // Function to fetch request history
-  const fetchRequestHistory = async () => {
-    if (!userid) return;
-    
-    try {
-      setRequestHistoryLoading(true);
-      setRequestHistoryError('');
-      
-      // Fetch requests from sponsership_requests_university table
-      const { data: requests, error } = await supabase
-        .from('sponsership_requests_university')
-        .select('*')
-        .eq('university_id', userid);
-        
-      if (error) {
-        throw error;
-      }
-      
-      // Fetch brand details for each request
-      const requestsWithBrandDetails = await Promise.all(
-        (requests || []).map(async (request) => {
-          const brandDetails = await fetchBrandDetails(request.company_id);
-          return {
-            ...request,
-            brandName: brandDetails?.brand_name || 'Unknown Brand',
-            brandLogo: brandDetails?.logo || null
-          };
-        })
-      );
-      
-      setRequestHistory(requestsWithBrandDetails);
-    } catch (error: any) {
-      console.error('Error fetching request history:', error);
-      setRequestHistoryError(`Failed to load request history: ${error.message}`);
-    } finally {
-      setRequestHistoryLoading(false);
-    }
-  };
-
-  // Function to fetch brand details
-  const fetchBrandDetails = async (brandId: string) => {
-    if (!brandId) return null;
-    
+  const loadCredentials = async () => {
     try {
       const { data, error } = await supabase
-        .from('brand_profiles')
-        .select('brand_name, logo')
-        .eq('id', brandId)
-        .single();
-        
-      if (error) {
-        console.error('Error fetching brand details:', error);
-        return null;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error in fetchBrandDetails:', error);
-      return null;
-    }
-  };
-
-  // Function to fetch brand profiles from the database
-  const fetchBrandProfiles = async () => {
-    try {
-      setBrandsLoading(true);
-      setBrandsError('');
-
-      const { data, error } = await supabase
-        .from('brand_profiles')
+        .from('predefined_credentials')
         .select('*')
-        .filter('is_complete', 'eq', true)
-        .order('brand_name', { ascending: true });
+        .order('username', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching brand profiles:', error);
-        setBrandsError('Failed to load brand profiles. Please try again later.');
-        return;
-      }
-
-      console.log('Fetched brand profiles:', data);
-      setBrandProfiles(data || []);
+      if (error) throw error;
+      setCredentials(data || []);
     } catch (error) {
-      console.error('Error in fetchBrandProfiles:', error);
-      setBrandsError('An unexpected error occurred. Please try again.');
-    } finally {
-      setBrandsLoading(false);
+      console.error('Error loading credentials:', error);
     }
   };
 
-  const fetchUniversityProfile = async () => {
-    if (!username) return;
+  const loadPendingRequests = async () => {
     try {
-      setProfileLoading(true);
-      const { data, error } = await supabase
-        .from('university_profiles')
-        .select('*')
-        .eq('username', username)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching university profile:', error);
-        return;
-      }
-
-      if (data) {
-        setProfile(data);
-        setProfileComplete(data.is_complete || false);
-        if (data.logo) { // Check for 'logo' instead of 'crest'
-          setPreviewImage(data.logo);
-        }
-      } else {
-        // Initialize a new profile with the username
-        setProfile({
-          username: username,
-          university_name: '',
-          social_media: { facebook: '', twitter: '', instagram: '', linkedin: '' }
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching university profile:', error);
-    } finally {
-      setProfileLoading(false);
-    }
-  };
-
-  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-
-    if (name.startsWith('social_media.')) {
-      const socialKey = name.split('.')[1];
-      setProfile(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          social_media: {
-            ...prev.social_media,
-            [socialKey]: value
-          }
-        };
-      });
-    } else {
-      setProfile(prev => {
-        if (!prev) return null;
-        return { ...prev, [name]: value };
-      });
-    }
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setProfileError('Image size should be less than 5MB');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      setPreviewImage(base64String);
-      setProfile(prev => {
-        if (!prev) return null;
-        return { ...prev, logo: base64String }; // Store in 'logo' field instead of 'crest'
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const saveProfile = async () => {
-    if (!profile || !username) return;
-
-    // Validate required fields
-    if (!profile.university_name.trim()) {
-      setProfileError('University name is required');
-      return;
-    }
-
-    try {
-      setProfileSaving(true);
-      setProfileError('');
-      setProfileSuccess(false);
-
-      console.log("Profile data before sending:", profile);
-
-      // Create a clean profile object with correct field names
-      const cleanProfileData = {
-        username: profile.username,
-        university_name: profile.university_name,
-        website: profile.website || null,
-        location: profile.location || null,
-        type: profile.type || null,
-        description: profile.description || null,
-        contact_email: profile.contact_email || null,
-        contact_phone: profile.contact_phone || null,
-        social_media: profile.social_media || null,
-        address: profile.address || null,
-        logo: previewImage, // Use the previewImage state which contains the base64 string
-        is_complete: true,
-        updated_at: new Date().toISOString()
-      };
-
-      console.log("Data being sent to Supabase:", cleanProfileData);
-
-      // First, check if the university profile already exists
-      const { data: existingProfile, error: fetchError } = await supabase
-        .from('university_profiles')
-        .select('id')
-        .eq('username', username)
-        .single();
-
-      let result;
-      if (existingProfile?.id) {
-        // Update existing profile
-        result = await supabase
-          .from('university_profiles')
-          .update(cleanProfileData)
-          .eq('id', existingProfile.id);
-      } else {
-        // Insert new profile
-        result = await supabase
-          .from('university_profiles')
-          .insert([cleanProfileData]);
-      }
-
-      console.log("Supabase operation result:", result);
-      
-      if (result.error) {
-        throw result.error;
-      }
-
-      setProfileComplete(true);
-      setProfileSuccess(true);
-      console.log('Profile saved successfully');
-    } catch (error: any) {
-      console.error('Error saving profile:', error);
-      setProfileError(`Failed to save profile: ${error.message}`);
-    } finally {
-      setProfileSaving(false);
-    }
-  };
-
-  // Load accepted sponsorships for the current user
-  const loadAcceptedSponsorships = async () => {
-    if (!userid) return [];
-    try {
-      console.log("user_id", userid);
+      console.log('Loading pending requests');
       const { data, error } = await supabase
         .from('sponsorship_requests')
-        .select('*')
-        .eq('accepted_by', userid);
+        .select(`
+          id,
+          user_id,
+          title,
+          description,
+          amount,
+          event_date,
+          event_category,
+          application_deadline,
+          status,
+          requirements,
+          target_criteria,
+          expected_footfall,
+          created_at,
+          feedback
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error loading accepted sponsorships:', error);
-        return [];
-      }
-
-      console.log("Accepted sponsorships data:", data);
-      return data || [];
+      if (error) throw error;
+      console.log('Pending requests loaded:', data);
+      const requests = data || [];
+      setPendingRequests(requests);
+      
+      // Update the pending requests count in stats
+      setStats(prevStats => ({
+        ...prevStats,
+        pendingRequests: requests.length
+      }));
     } catch (error) {
-      console.error('Error loading accepted sponsorships:', error);
-      return [];
+      console.error('Error loading pending requests:', error);
     }
   };
 
-  const fetchBrandLogo = async (userId: string) => {
+  const loadStudentWaitlist = async () => {
     try {
       const { data, error } = await supabase
-        .from('brand_profiles')
-        .select('logo')
-        .eq('id', userId)
-        .order('created_at', { ascending: false })
-        .single();
+        .from('student_waitlist')
+        .select('id, name, email, phone, university, created_at')
+        .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching brand logo:', error);
-        return null;
-      }
+      if (error) throw error;
 
-      return data?.logo || null;
+      setStats(prevStats => ({
+        ...prevStats,
+        studentWaitlist: data || [],
+        totalUniversities: data?.length || 0
+      }));
     } catch (error) {
-      console.error('Error fetching brand logo:', error);
-      return null;
+      console.error('Error loading student waitlist:', error);
     }
   };
 
-  const loadSponsorships = async () => {
+  const loadInsightsData = async () => {
     try {
-      console.log("Loading sponsorships...");
-      setLoading(true);
+      // Fetch signup data and credential counts in parallel
+      const [signupResponse, credsResponse] = await Promise.all([
+        supabase
+          .from('student_waitlist')
+          .select('created_at')
+          .order('created_at'),
+        supabase
+          .from('predefined_credentials')
+          .select('user_type, username, password, created_at')
+      ]);
 
-      // First load the accepted sponsorships
-      const acceptedSponsorshipsData = await loadAcceptedSponsorships();
-      const acceptedIds = acceptedSponsorshipsData.map(s => s.id);
-      console.log("User has accepted sponsorship IDs:", acceptedIds);
+      if (signupResponse.error) throw signupResponse.error;
+      if (credsResponse.error) throw credsResponse.error;
 
-      // Try to fetch approved sponsorships with retry logic
-      let approvedData = null;
-      let approvedError = null;
-      let retries = 3;
+      // Calculate totals from raw data
+      const credentials = credsResponse.data || [];
+      const totalUniversities = credentials.filter(c => c.user_type === 'university').length;
+      const totalBrands = credentials.filter(c => c.user_type === 'brand').length;
 
-      while (retries > 0 && !approvedData) {
-        try {
-          const response = await supabase
-            .from('sponsorship_requests')
-            .select('*')
-            .eq('status', 'approved')
-            .order('created_at', { ascending: false });
+      // Process signup data
+      const signupsByDate = (signupResponse.data || []).reduce((acc: {[key: string]: number}, curr) => {
+        const date = new Date(curr.created_at).toISOString().split('T')[0];
+        acc[date] = (acc[date] || 0) + 1;
+        return acc;
+      }, {});
 
-          if (response.error) {
-            approvedError = response.error;
-            retries--;
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retrying
-          } else {
-            approvedData = response.data;
-            break;
-          }
-        } catch (e) {
-          approvedError = e;
-          retries--;
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retrying
-        }
-      }
+      const signups = Object.entries(signupsByDate)
+        .sort((a, b) => a[0].localeCompare(b[0])) // Sort by date
+        .map(([date, count]) => ({
+          date,
+          count
+        }));
 
-      if (!approvedData) {
-        console.error('Supabase error after retries:', approvedError);
-        throw approvedError || new Error('Failed to load approved sponsorships');
-      }
+      // Create university and brand lists
+      const universities = credentials.filter(c => c.user_type === 'university');
+      const brands = credentials.filter(c => c.user_type === 'brand');
 
-      // Try to fetch accepted sponsorships with retry logic
-      let acceptedData = null;
-      let acceptedError = null;
-      retries = 3;
+      setInsightsData({
+        signups,
+        totalUniversities: universities.length,
+        totalBrands: brands.length,
+        universities,
+        brands
+      });
 
-      while (retries > 0 && !acceptedData) {
-        try {
-          const response = await supabase
-            .from('sponsorship_requests')
-            .select('*')
-            .eq('acceptance_status', 'accepted')
-            .order('created_at', { ascending: false });
+      console.log('Insights data loaded:', {
+        signupsCount: signups.length,
+        totalUniversities,
+        totalBrands
+      });
 
-          if (response.error) {
-            acceptedError = response.error;
-            retries--;
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retrying
-          } else {
-            acceptedData = response.data;
-            break;
-          }
-        } catch (e) {
-          acceptedError = e;
-          retries--;
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retrying
-        }
-      }
-
-      if (!acceptedData) {
-        console.error('Supabase error after retries:', acceptedError);
-        throw acceptedError || new Error('Failed to load accepted sponsorships');
-      }
-
-      // Filter out sponsorships that are already accepted by others
-      const difference = approvedData.filter(approvedItem => 
-        !acceptedData.some(acceptedItem => acceptedItem.id === approvedItem.id)
-      );
-
-      console.log('Records that are approved but not accepted by anyone:', difference);
-
-      // Combine user's accepted sponsorships with available sponsorships
-      const allSponsorshipsToDisplay = [...acceptedSponsorshipsData, ...difference];
-
-      // Fetch brand logos for all sponsorships
-      const sponsorshipsWithLogos = await Promise.all(
-        allSponsorshipsToDisplay.map(async (sponsorship) => {
-          const brandLogo = sponsorship.user_id ? await fetchBrandLogo(sponsorship.user_id) : null;
-          return { 
-            ...sponsorship, 
-            isAccepted: acceptedIds.includes(sponsorship.id), 
-            brandLogo 
-          };
-        })
-      );
-
-      console.log("Total sponsorships to display:", sponsorshipsWithLogos.length);
-      console.log(`- Accepted by user: ${acceptedSponsorshipsData.length}`);
-      console.log(`- Available for acceptance: ${difference.length}`);
-
-      setSponsorships(sponsorshipsWithLogos);
-      setAcceptedSponsorships(acceptedIds);
     } catch (error) {
-      console.error(`[${new Date().toISOString()}] Error loading sponsorships:`, error);
+      console.error('Error loading insights data:', error);
+    }
+  };
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([
+        loadPendingRequests(),
+        loadStudentWaitlist(),
+        loadInsightsData()
+      ]);
+// Fetch dashboard stats, pending and approved requests count
+const [statsResponse, pendingCountResponse, approvedResponse] = await Promise.all([
+ supabase
+   .from('dashboard_stats')
+   .select('*')
+   .order('stat_date', { ascending: false })
+   .limit(1),
+ supabase
+   .from('sponsorship_requests')
+   .select('id', { count: 'exact', head: true })
+   .eq('status', 'pending'),
+ supabase
+   .from('sponsorship_requests')
+   .select(`
+     id,
+     title,
+     description,
+     amount,
+     requirements,
+     target_criteria,
+     event_date,
+     event_category,
+     expected_footfall,
+     application_deadline,
+     reviewer_id,
+     review_date,
+     created_at,
+     user_id,
+     status
+   `)
+   .eq('status', 'approved')
+   .order('created_at', { ascending: false })
+]);
+
+const statsData = statsResponse.data;
+const approvedSponshorships = approvedResponse.data || [];
+const pendingCount = pendingCountResponse.count || 0;
+setApprovedSponsorships(approvedSponshorships);
+
+      if (statsData && statsData[0]) {
+        setStats(prevStats => ({
+          ...prevStats,
+          totalBrands: statsData[0].total_brands || 0,
+          totalUniversities: prevStats.studentWaitlist.length,
+          pendingRequests: pendingCount,
+          totalSponshorships: approvedSponshorships.length,
+          growthStats: {
+            brands: 0,
+            universities: 0,
+            sponsorships: 0
+          }
+        }));
+      }
+
+      // Fetch sponsorship requests
+      const { data: requestsData } = await supabase
+        .from('sponsorship_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (requestsData) {
+        setSponsorshipRequests(requestsData);
+      }
+
+      // Fetch activity logs
+      const { data: logsData } = await supabase
+        .from('sponsorship_activity_logs')
+        .select(`
+          *,
+          sponsorship_requests (
+            title
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (logsData) {
+        setActivityLogs(logsData);
+      }
+
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSort = (key: string) => {
-    console.log("Sorting by:", key);
-    setSortConfig({
-      key,
-      direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc'
-    });
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadDashboardData();
+    await loadCredentials();
+    setIsRefreshing(false);
   };
 
-  const getTimeLeft = (deadline: string) => {
-    const days = Math.ceil((new Date(deadline).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-    if (days < 0) return 'Expired';
-    if (days === 0) return 'Last day';
-    if (days === 1) return '1 day left';
-    return `${days} days left`;
-  };
-
-  const openSponsorshipDetails = async (sponsorship: SponsorshipListing) => {
-    setSelectedSponsorship(sponsorship);
-    setShowModal(true);
-    setAcceptSuccess(false);
-    setAcceptError('');
-    
-    // Check if the university has already accepted this sponsorship
-    setAlreadyAccepted(sponsorship.isAccepted || false);
-  };
-
-  const handleAcceptSponsorship = async () => {
-    if (!selectedSponsorship || !userid) {
-      setAcceptError("Unable to accept. Missing required information.");
-      return;
-    }
-
-    // Check if profile is complete for universities
-    if (userType === 'university' && !profileComplete) {
-      setAcceptError("Please complete your profile before accepting sponsorships.");
-      setActiveTab('profile');
-      setShowModal(false);
-      return;
-    }
-
+  const handleCopy = async (text: string, id: string, type: 'username' | 'password') => {
     try {
-      setAcceptLoading(true);
-      setAcceptError('');
+      await navigator.clipboard.writeText(text);
+      setCopiedItem({ id, type });
+      setTimeout(() => setCopiedItem(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
-      // Check one more time if already accepted to prevent duplicate entries
-      const { data: existingAcceptance, error: checkError } = await supabase
-        .from('sponsorship_requests')
-        .select('*')
-        .eq('accepted_by', userid)
-        .eq('id', selectedSponsorship.id)
-        .single();
-
-      if (existingAcceptance) {
-        setAlreadyAccepted(true);
-        setAcceptError('You have already accepted this sponsorship.');
-        return;
-      }
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        console.error('Error checking acceptance status:', checkError);
-        setAcceptError('An error occurred while checking your acceptance status.');
-        return;
-      }
-
-      // Create the acceptance record
-      const sponsorshipAcceptance: SponsorshipAcceptance = {
-        accepted_by: userid.toString(),
-        acceptance_status: 'accepted',
-        accepted_on: new Date().toISOString()
-      };
-
-      const { error: updateError } = await supabase
-        .from('sponsorship_requests')
-        .update(sponsorshipAcceptance)
-        .eq('id', selectedSponsorship.id);
-
+  const handleRequestAction = async (requestId: string, status: 'approved' | 'rejected') => {
+    try {
+      console.log('Processing request action:', { requestId, status });
+      setProcessingRequestId(requestId);
+      
+      // Use the RPC function with proper reviewer info
+      const { error: updateError } = await supabase.rpc('admin_update_request_status', {
+        p_request_id: requestId,
+        p_status: status
+      });
+  
       if (updateError) {
-        console.error('Error accepting sponsorship:', updateError);
-        setAcceptError('Failed to accept sponsorship: ' + updateError.message);
-        return;
+        console.error('Update error details:', updateError);
+        throw updateError;
       }
-
-      setAcceptSuccess(true);
-      setAlreadyAccepted(true);
-
-      // Update the list of accepted sponsorships
-      setAcceptedSponsorships(prev => [...prev, selectedSponsorship.id]);
-
-      // Update the sponsorships list to reflect the new acceptance status
-      setSponsorships(prev => 
-        prev.map(s => 
-          s.id === selectedSponsorship.id ? { ...s, isAccepted: true } : s
-        )
-      );
-
-      console.log('Sponsorship accepted successfully');
+  
+      // If update succeeded, refresh data
+      await loadPendingRequests();
+      setSelectedRequest(null);
+      alert(`Request ${status} successfully`);
+      
     } catch (error: any) {
-      console.error('Error accepting sponsorship:', error);
-      setAcceptError('An unexpected error occurred: ' + error.message);
+      console.error('Error details:', error);
+      alert(`Error updating request status: ${error.message}`);
     } finally {
-      setAcceptLoading(false);
+      setProcessingRequestId(null);
     }
   };
 
-  // Function to handle brand card click - placeholder for now
-  const handleRequestSponsorship = (brandId: string, brandName: string) => {
-    // Reset form and set selected brand
-    setRequestFormData({
-      description: '',
-      amount: '',
-      event_date: '',
-      event_category: ''
-    });
-    setSelectedBrandId(brandId);
-    setSelectedBrandName(brandName);
-    setRequestError('');
-    setRequestSuccess(false);
-    setShowRequestModal(true);
-  };
-
-  const handleSubmitRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedBrandId || !profile) {
-      setRequestError("Unable to submit request. Missing required information.");
-      return;
-    }
-
+  const handleFeedback = async () => {
+    if (!selectedRequest || !feedbackText.trim()) return;
+  
     try {
-      setRequestSubmitting(true);
-      setRequestError('');
-
-      // Prepare data for submission
-      const requestData = {
-        company_id: selectedBrandId,
-        description: requestFormData.description,
-        amount: requestFormData.amount,
-        event_date: requestFormData.event_date,
-        event_category: requestFormData.event_category,
-        status: 'pending',
-        university_id: userid,
-        university_name: profile.university_name,
-        university_url: profile.website || null
-      };
-
-      // Submit to Supabase
-      const { error } = await supabase
-        .from('sponsership_requests_university')
-        .insert([requestData]);
-
-      if (error) {
-        console.error('Error submitting sponsorship request:', error);
-        throw error;
+      console.log('Submitting feedback for request:', selectedRequest.id);
+      setProcessingRequestId(selectedRequest.id);
+  
+      // First update the status to "changes_requested"
+      const { error: statusError } = await supabase.rpc('admin_update_request_status', {
+        p_request_id: selectedRequest.id,
+        p_status: 'changes_requested'
+      });
+  
+      if (statusError) {
+        console.error('Status update error details:', statusError);
+        throw statusError;
       }
-
-      setRequestSuccess(true);
-      setTimeout(() => {
-        setShowRequestModal(false);
-      }, 2000); // Close modal after 2 seconds
+  
+      // Then update the feedback
+      const { error: feedbackError } = await supabase.rpc('admin_update_request_feedback', {
+        p_request_id: selectedRequest.id,
+        p_feedback: feedbackText
+      });
+  
+      if (feedbackError) {
+        console.error('Feedback update error details:', feedbackError);
+        throw feedbackError;
+      }
+  
+      // Reset state and refresh data
+      setFeedbackText('');
+      setShowFeedbackModal(false);
+      setSelectedRequest(null);
+      await loadPendingRequests();
+      alert('Feedback submitted and status updated to "changes requested"');
+      
     } catch (error: any) {
-      console.error('Error submitting sponsorship request:', error);
-      setRequestError('Failed to submit request: ' + error.message);
+      console.error('Error details:', error);
+      alert(`Error submitting feedback: ${error.message}`);
     } finally {
-      setRequestSubmitting(false);
+      setProcessingRequestId(null);
     }
   };
 
-  // Update the handleRequestFormChange function to stop event propagation:
-  const handleRequestFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    // Stop event propagation to prevent background updates
-    e.stopPropagation();
-    const { name, value } = e.target;
-    setRequestFormData(prev => ({ ...prev, [name]: value }));
-  };
+  const filteredCredentials = credentials.filter(cred => {
+    const matchesSearch = 
+      cred.username.includes(credentialSearch) || 
+      (cred.assigned_to?.toLowerCase().includes(credentialSearch.toLowerCase()) ?? false);
+    
+    const matchesFilter = 
+      credentialFilter === 'all' || 
+      (credentialFilter === 'assigned' && cred.is_assigned) || 
+      (credentialFilter === 'available' && !cred.is_assigned) ||
+      credentialFilter === cred.user_type;
 
-  // Apply filtering based on search term and filters
-  const filteredSponsorships = sponsorships
-    .filter(sponsorship => {
-      // Search term filter
-      if (searchTerm && !sponsorship.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
-          !sponsorship.description?.toLowerCase().includes(searchTerm.toLowerCase())) {
-        return false;
-      }
-
-      // Amount filter - only filter if the sponsorship has an amount value
-      if (typeof sponsorship.amount === 'number' && 
-          (sponsorship.amount < filters.amount[0] || sponsorship.amount > filters.amount[1])) {
-        return false;
-      }
-
-      // Category filter - only filter if category is specified
-      if (filters.category !== 'all' && sponsorship.event_category !== filters.category) {
-        return false;
-      }
-
-      // Deadline filter
-      if (filters.deadline !== 'all' && sponsorship.application_deadline) {
-        const deadline = new Date(sponsorship.application_deadline);
-        const today = new Date();
-        const diffTime = deadline.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (filters.deadline === 'week' && diffDays > 7) {
-          return false;
-        } else if (filters.deadline === 'month' && diffDays > 30) {
-          return false;
-        } else if (filters.deadline === 'quarter' && diffDays > 90) {
-          return false;
-        }
-      }
-
-      return true;
-    })
-    .sort((a, b) => {
-      const direction = sortConfig.direction === 'asc' ? 1 : -1;
-      switch (sortConfig.key) {
-        case 'amount':
-          return (a.amount - b.amount) * direction;
-        case 'event_date':
-          return (new Date(a.event_date).getTime() - new Date(b.event_date).getTime()) * direction;
-        case 'deadline':
-          return (new Date(a.application_deadline).getTime() - new Date(b.application_deadline).getTime()) * direction;
-        default:
-          return 0;
-      }
-    });
-
-  // Function to get status badge color based on status
-  const getStatusBadgeStyles = (status: string) => {
-    switch(status.toLowerCase()) {
-      case 'approved':
-        return 'bg-neon-green/10 text-neon-green border-neon-green/30';
-      case 'rejected':
-        return 'bg-red-500/10 text-red-400 border-red-500/30';
-      case 'pending':
-      default:
-        return 'bg-amber-500/10 text-amber-300 border-amber-500/30';
-    }
-  };
-
-  // Brand Card Component - to be used in Submit tab
-  const BrandCard = ({ brand }: { brand: BrandProfile }) => {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white/5 backdrop-blur-lg rounded-xl overflow-hidden border border-neon-green/20 hover:border-neon-green/40 transition-all"
-      >
-        <div className="p-6 flex flex-col h-full">
-          {/* Brand Logo */}
-          <div className="flex justify-center mb-4">
-            {brand.logo ? (
-              <img
-                src={brand.logo}
-                alt={`${brand.brand_name || 'Brand'} logo`}
-                className="w-24 h-24 object-contain rounded-lg bg-white/5 p-2"
-              />
-            ) : (
-              <div className="w-24 h-24 flex items-center justify-center rounded-lg bg-white/5 text-gray-400">
-                <Building className="w-10 h-10" />
-              </div>
-            )}
-          </div>
-
-          {/* Brand Name */}
-          <h3 className="text-xl font-semibold text-white mb-3 text-center">
-            {brand.brand_name || 'Unnamed Brand'}
-          </h3>
-
-          {/* Brand Industry */}
-          {brand.industry && (
-            <p className="text-gray-400 text-center mb-3">
-              {brand.industry}
-            </p>
-          )}
-
-          {/* Max Offering */}
-          <div className="flex items-center justify-center gap-2 text-neon-green mt-2 mb-4">
-            <IndianRupee className="w-5 h-5" />
-            <span className="text-xl font-semibold">
-              {brand.max_offering ? parseInt(brand.max_offering).toLocaleString() : 'Varies'}
-            </span>
-            <span className="text-sm text-gray-300">max</span>
-          </div>
-
-          {/* Request Button */}
-          <div className="mt-auto">
-            <button
-              onClick={() => handleRequestSponsorship(brand.id, brand.brand_name || 'Unnamed Brand')}
-              className="flex items-center justify-center gap-2 w-full py-2 mt-4 bg-neon-green/10 border border-neon-green text-neon-green rounded-lg font-semibold hover:bg-neon-green hover:text-black transition-all"
-            >
-              <span>Request Sponsorship</span>
-              <ExternalLink className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    );
-  };
-
-  // Request Card Component - for the Status tab
-  const RequestCard = ({ request }: { request: SponsorshipRequest }) => {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white/5 backdrop-blur-lg rounded-xl overflow-hidden border border-neon-green/20 hover:border-neon-green/40 transition-all"
-      >
-        <div className="p-6 flex flex-col h-full">
-          {/* Brand Logo */}
-          <div className="flex justify-center mb-4">
-            {request.brandLogo ? (
-              <img
-                src={request.brandLogo}
-                alt={`${request.brandName || 'Brand'} logo`}
-                className="w-24 h-24 object-contain rounded-lg bg-white/5 p-2"
-              />
-            ) : (
-              <div className="w-24 h-24 flex items-center justify-center rounded-lg bg-white/5 text-gray-400">
-                <Building className="w-10 h-10" />
-              </div>
-            )}
-          </div>
-
-          {/* Brand Name */}
-          <h3 className="text-xl font-semibold text-white mb-3 text-center">
-            {request.brandName || 'Unknown Brand'}
-          </h3>
-
-          {/* Requested Amount */}
-          <div className="flex items-center justify-center gap-2 text-neon-green mb-4">
-            <IndianRupee className="w-5 h-5" />
-            <span className="text-2xl font-semibold">
-              {parseInt(request.amount).toLocaleString()}
-            </span>
-            <span className="text-sm text-gray-300">requested</span>
-          </div>
-
-          {/* Status Badge */}
-          <div className="flex justify-center mb-4">
-            <span className={`px-3 py-1 rounded-full text-sm border ${getStatusBadgeStyles(request.status)}`}>
-              {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-            </span>
-          </div>
-
-          {/* Event Category & Date */}
-          <div className="space-y-2 mb-4 text-center">
-            <div className="flex items-center justify-center gap-2 text-gray-300">
-              <Calendar className="w-4 h-4" />
-              <span>{request.event_category}</span>
-            </div>
-            <div className="flex items-center justify-center gap-2 text-gray-300">
-              <Clock className="w-4 h-4" />
-              <span>Event date: {new Date(request.event_date).toLocaleDateString()}</span>
-            </div>
-          </div>
-
-          {/* View Details Button */}
-          <div className="mt-auto">
-            <button
-              className="flex items-center justify-center gap-2 w-full py-2 mt-4 bg-neon-green/10 border border-neon-green text-neon-green rounded-lg font-semibold hover:bg-neon-green hover:text-black transition-all"
-            >
-              <span>View Details</span>
-              <ExternalLink className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    );
-  };
+    return matchesSearch && matchesFilter;
+  });
 
   if (loading) {
     return (
@@ -1014,1099 +493,873 @@ const Sponsorships = () => {
     );
   }
 
-  // Profile completeness warning for universities
-  const showProfileWarning = userType === 'university' && !profileComplete && activeTab !== 'profile';
-
   return (
     <div className="min-h-screen pt-16 bg-black">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-4">Sponsorships</h1>
-          <p className="text-xl text-gray-300">
-            {userType === 'university'
-              ? 'Find and apply for sponsorships from leading brands'
-              : 'Manage your sponsorship listings and applications'}
-          </p>
-        </div>
-
-        {/* Profile Completeness Warning */}
-        {showProfileWarning && (
-          <div className="bg-amber-900/30 border border-amber-500/30 rounded-lg p-4 mb-6 flex items-center gap-3">
-            <AlertCircle className="text-amber-400 w-6 h-6 flex-shrink-0" />
-            <div>
-              <p className="text-amber-400 font-medium">Your profile is incomplete</p>
-              <p className="text-amber-300/80 text-sm mt-1">
-                Complete your university profile to access sponsorship opportunities.
-              </p>
-            </div>
-            <button
-              onClick={() => setActiveTab('profile')}
-              className="ml-auto px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg transition-colors"
-            >
-              Complete Profile
-            </button>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
+            <p className="text-gray-400">Manage sponsorships and monitor platform activity</p>
           </div>
-        )}
-
-        {/* Tab Navigation */}
-        <div className="flex flex-wrap border-b border-neon-green/30 mb-8 overflow-x-auto pb-1">
           <button
-            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'profile'
-                ? 'bg-neon-green/10 text-neon-green border-b-2 border-neon-green'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            onClick={handleRefresh}
+            className={`p-2 rounded-lg border border-neon-green/20 text-white hover:bg-neon-green/5 transition-all ${
+              isRefreshing ? 'animate-spin' : ''
             }`}
-            onClick={() => setActiveTab('profile')}
+            disabled={isRefreshing}
           >
-            <UserCircle className="w-5 h-5" />
-            Profile
-          </button>
-          <button
-            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'submit'
-                ? 'bg-neon-green/10 text-neon-green border-b-2 border-neon-green'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-            onClick={() => !profileComplete && userType === 'university' ? null : setActiveTab('submit')}
-            disabled={!profileComplete && userType === 'university'}
-            style={!profileComplete && userType === 'university' ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-          >
-            <FileText className="w-5 h-5" />
-            Submit a Sponsorship Request
-          </button>
-          <button
-            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'opportunities'
-                ? 'bg-neon-green/10 text-neon-green border-b-2 border-neon-green'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-            onClick={() => !profileComplete && userType === 'university' ? null : setActiveTab('opportunities')}
-            disabled={!profileComplete && userType === 'university'}
-            style={!profileComplete && userType === 'university' ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-          >
-            <IndianRupee className="w-5 h-5" />
-            Sponsorship Opportunities
-          </button>
-          <button
-            className={`px-6 py-3 font-medium text-lg rounded-t-lg flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'status'
-                ? 'bg-neon-green/10 text-neon-green border-b-2 border-neon-green'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-            onClick={() => !profileComplete && userType === 'university' ? null : setActiveTab('status')}
-            disabled={!profileComplete && userType === 'university'}
-            style={!profileComplete && userType === 'university' ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-          >
-            <ListChecks className="w-5 h-5" />
-            Request Status
+            <RefreshCw className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Profile Tab */}
-        {activeTab === 'profile' && (
-          <div className="bg-white/5 backdrop-blur-lg rounded-lg p-8 border border-neon-green/20">
-            {profileLoading ? (
-              <div className="flex justify-center items-center h-48">
-                <div className="text-white">Loading profile...</div>
-              </div>
-            ) : (
-              <>
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-white mb-2">University Profile</h2>
-                  <p className="text-gray-300">
-                    Complete your university profile to access sponsorship opportunities.
-                  </p>
-                </div>
-
-                {profileError && (
-                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-6 flex items-center gap-3">
-                    <XCircle className="text-red-500 w-5 h-5 flex-shrink-0" />
-                    <p className="text-red-400">{profileError}</p>
-                  </div>
-                )}
-
-                {profileSuccess && (
-                  <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4 mb-6 flex items-center gap-3">
-                    <CheckCircle className="text-neon-green w-5 h-5 flex-shrink-0" />
-                    <p className="text-neon-green">Profile saved successfully!</p>
-                  </div>
-                )}
-
-                <form className="space-y-8">
-                  {/* Basic Information */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <Building className="w-5 h-5" />
-                      Basic Information
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Username
-                        </label>
-                        <input
-                          type="text"
-                          name="username"
-                          value={profile?.username || ''}
-                          disabled
-                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-                        />
-                        <p className="text-xs text-gray-400 mt-1">Username cannot be changed</p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1 required">
-                          University Name*
-                        </label>
-                        <input
-                          type="text"
-                          name="university_name"
-                          value={profile?.university_name || ''}
-                          onChange={handleProfileChange}
-                          required
-                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Website
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <Globe className="w-4 h-4" />
-                          </span>
-                          <input
-                            type="url"
-                            name="website"
-                            placeholder="https://www.university.edu"
-                            value={profile?.website || ''}
-                            onChange={handleProfileChange}
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          University Type
-                        </label>
-                        <select
-                          name="type"
-                          value={profile?.type || ''}
-                          onChange={handleProfileChange}
-                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                        >
-                          <option value="" className="bg-black">Select Type</option>
-                          {universityTypes.map(type => (
-                            <option key={type} value={type} className="bg-black">
-                              {type}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* University Logo Section */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <Upload className="w-5 h-5" />
-                      University Logo
-                    </h3>
-                    <div className="flex flex-col md:flex-row gap-6 items-center">
-                      <div className="flex-shrink-0">
-                        {previewImage ? (
-                          <div className="relative">
-                            <img
-                              src={previewImage}
-                              alt="University logo"
-                              className="w-32 h-32 object-contain bg-white/5 border border-neon-green/20 rounded-lg p-2"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPreviewImage(null);
-                                setProfile(prev => prev ? {...prev, logo: null} : null); // Update reference from 'crest' to 'logo'
-                              }}
-                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="w-32 h-32 bg-white/5 border border-neon-green/20 rounded-lg flex items-center justify-center">
-                            <Upload className="w-10 h-10 text-gray-400" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-grow">
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          onChange={handleImageUpload}
-                          accept="image/*"
-                          className="hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="px-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white hover:bg-white/10 transition-all flex items-center gap-2"
-                        >
-                          <Upload className="w-4 h-4" />
-                          {previewImage ? 'Change Logo' : 'Upload Logo'}
-                        </button>
-                        <p className="text-gray-400 text-sm mt-2">
-                          Upload your university logo. Max size: 5MB. Recommended format: PNG or JPEG with transparent background.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Information */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <Phone className="w-5 h-5" />
-                      Contact Information
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Email Address
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <Mail className="w-4 h-4" />
-                          </span>
-                          <input
-                            type="email"
-                            name="contact_email"
-                            placeholder="contact@university.edu"
-                            value={profile?.contact_email || ''}
-                            onChange={handleProfileChange}
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Phone Number
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <Phone className="w-4 h-4" />
-                          </span>
-                          <input
-                            type="tel"
-                            name="contact_phone"
-                            placeholder="+91 XXXXX XXXXX"
-                            value={profile?.contact_phone || ''}
-                            onChange={handleProfileChange}
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Address
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <MapPin className="w-4 h-4" />
-                          </span>
-                          <textarea
-                            name="address"
-                            placeholder="Full address of the university"
-                            value={profile?.address || ''}
-                            onChange={handleProfileChange}
-                            rows={3}
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Location
-                        </label>
-                        <input
-                          type="text"
-                          name="location"
-                          placeholder="City, State"
-                          value={profile?.location || ''}
-                          onChange={handleProfileChange}
-                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                        />
-                      </div>
-                                    </div>
-                                  </div>
-                  
-                                  {/* About */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <FileText className="w-5 h-5" />
-                      About University
-                    </h3>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Description
-                    </label>
-                    <textarea
-                      name="description"
-                      placeholder="Tell us about your university, its achievements, and what makes it unique..."
-                      value={profile?.description || ''}
-                      onChange={handleProfileChange}
-                      rows={5}
-                      className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Social Media */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <Globe className="w-5 h-5" />
-                      Social Media
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Facebook
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <Facebook className="w-4 h-4" />
-                          </span>
-                          <input
-                            type="text"
-                            name="social_media.facebook"
-                            placeholder="https://facebook.com/university"
-                            value={profile?.social_media?.facebook || ''}
-                            onChange={handleProfileChange}
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Twitter
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <Twitter className="w-4 h-4" />
-                          </span>
-                          <input
-                            type="text"
-                            name="social_media.twitter"
-                            placeholder="https://twitter.com/university"
-                            value={profile?.social_media?.twitter || ''}
-                            onChange={handleProfileChange}
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          Instagram
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <Instagram className="w-4 h-4" />
-                          </span>
-                          <input
-                            type="text"
-                            name="social_media.instagram"
-                            placeholder="https://instagram.com/university"
-                            value={profile?.social_media?.instagram || ''}
-                            onChange={handleProfileChange}
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">
-                          LinkedIn
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <Linkedin className="w-4 h-4" />
-                          </span>
-                          <input
-                            type="text"
-                            name="social_media.linkedin"
-                            placeholder="https://linkedin.com/school/university"
-                            value={profile?.social_media?.linkedin || ''}
-                            onChange={handleProfileChange}
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Form Actions */}
-                  <div className="flex justify-end pt-4 border-t border-neon-green/20">
-                    <button
-                      type="button"
-                      onClick={saveProfile}
-                      disabled={profileSaving}
-                      className={`flex items-center justify-center gap-2 px-8 py-3 bg-neon-green text-black rounded-lg font-semibold hover:bg-[#00CC00] transition-all ${
-                        profileSaving ? 'opacity-70 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      {profileSaving ? 'Saving...' : 'Save Profile'}
-                      {!profileSaving && <Save className="w-5 h-5" />}
-                    </button>
-                  </div>
-                </form>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Sponsorship Request Form Modal */}
-        {showRequestModal && (
-          <div className="fixed inset-0 bg-black/100 backdrop-blur-md flex items-center justify-center z-50 px-4" onClick={(e) => {
-            // Close modal when clicking outside content area
-            if (e.target === e.currentTarget) setShowRequestModal(false);
-          }}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-gray-900 border border-neon-green/30 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()} // Prevent clicks inside the modal from closing it
-            >
-              <div className="sticky top-0 bg-gray-900 border-b border-neon-green/20 p-4 flex justify-between items-center">
-                <h2 className="text-xl font-bold text-white">Request Sponsorship</h2>
-                <button onClick={() => setShowRequestModal(false)} className="text-gray-400 hover:text-white">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              <div className="p-6">
-                {requestSuccess ? (
-                  <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4 flex items-center gap-3">
-                    <CheckCircle className="text-neon-green w-6 h-6" />
-                    <p className="text-neon-green font-medium">Your sponsorship request has been submitted successfully!</p>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSubmitRequest}>
-                    <div className="mb-4">
-                      <p className="text-gray-300 mb-2">
-                        Requesting sponsorship from: <span className="text-white font-medium">{selectedBrandName}</span>
-                      </p>
-                    </div>
-                    {requestError && (
-                      <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-4 flex items-center gap-3">
-                        <XCircle className="text-red-500 w-5 h-5 flex-shrink-0" />
-                        <p className="text-red-400">{requestError}</p>
-                      </div>
-                    )}
-                    <div className="space-y-6" onClick={(e) => e.stopPropagation()}>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1 required">
-                          Description*
-                        </label>
-                        <textarea
-                          name="description"
-                          value={requestFormData.description}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            handleRequestFormChange(e);
-                          }}
-                          placeholder="Describe your sponsorship request..."
-                          rows={4}
-                          required
-                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1 required">
-                          Requested Amount (₹)*
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <IndianRupee className="w-4 h-4" />
-                          </span>
-                          <input
-                            type="number"
-                            name="amount"
-                            value={requestFormData.amount}
-                            onChange={handleRequestFormChange}
-                            placeholder="Enter amount"
-                            required
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1 required">
-                          Event Date*
-                        </label>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 py-2 rounded-l-lg border border-r-0 border-neon-green/20 bg-white/5 text-gray-400">
-                            <Calendar className="w-4 h-4" />
-                          </span>
-                          <input
-                            type="date"
-                            name="event_date"
-                            value={requestFormData.event_date}
-                            onChange={handleRequestFormChange}
-                            required
-                            className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-r-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1 required">
-                          Event Category*
-                        </label>
-                        <select
-                          name="event_category"
-                          value={requestFormData.event_category}
-                          onChange={handleRequestFormChange}
-                          required
-                          className="w-full px-4 py-2 bg-white/10 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <option value="" className="bg-black">Select Category</option>
-                          {categories.map(category => (
-                            <option key={category} value={category} className="bg-black">
-                              {category}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="mt-8 flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={requestSubmitting}
-                        className={`flex items-center justify-center gap-2 px-6 py-3 bg-neon-green text-black rounded-lg font-semibold hover:bg-[#00CC00] transition-all ${
-                          requestSubmitting ? 'opacity-70 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        {requestSubmitting ? 'Submitting...' : 'Submit Request'}
-                        {!requestSubmitting && <Send className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Submit a Sponsorship Request Tab - Updated with Brand Cards */}
-        {activeTab === 'submit' && (
-          <div className="bg-white/5 backdrop-blur-lg rounded-lg p-8 border border-neon-green/20">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-white mb-4">Submit a Sponsorship Request</h2>
-              <p className="text-gray-300">
-                Browse through available brands and request sponsorships for your events.
-              </p>
-            </div>
-            
-            {/* Search for brands */}
-            <div className="mb-8">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Search brands..."
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Brand Cards Grid */}
-            {brandsLoading ? (
-              <div className="flex justify-center items-center h-48">
-                <div className="text-white">Loading brands...</div>
-              </div>
-            ) : brandsError ? (
-              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-6 flex items-center gap-3">
-                <AlertCircle className="text-red-400 w-6 h-6 flex-shrink-0" />
-                <p className="text-red-400">{brandsError}</p>
-              </div>
-            ) : brandProfiles.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-400 text-lg">No brands found. Please try again later.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {brandProfiles
-                  .filter(brand => 
-                    !searchTerm || 
-                    (brand.brand_name && brand.brand_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                    (brand.industry && brand.industry.toLowerCase().includes(searchTerm.toLowerCase()))
-                  )
-                  .map((brand) => (
-                    <BrandCard key={brand.id} brand={brand} />
-                  ))
-                }
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Sponsorship Opportunities Tab - Current Functionality */}
-        {activeTab === 'opportunities' && (
-          <>
-            {/* Show profile warning if needed */}
-            {userType === 'university' && !profileComplete && (
-              <div className="bg-amber-900/30 border border-amber-500/30 rounded-lg p-4 mb-6 flex items-center gap-3">
-                <AlertCircle className="text-amber-400 w-6 h-6 flex-shrink-0" />
-                <div>
-                  <p className="text-amber-400 font-medium">Complete your profile to unlock sponsorships</p>
-                  <p className="text-amber-300/80 text-sm mt-1">
-                    You need to complete your university profile before you can accept sponsorships.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setActiveTab('profile')}
-                  className="ml-auto px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg transition-colors"
-                >
-                  Complete Now
-                </button>
-              </div>
-            )}
-
-            {/* Search and Filters */}
-            <div className="mb-8">
-              <div className="flex flex-col md:flex-row gap-4 mb-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Search sponsorships..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                  />
-                </div>
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white hover:bg-white/10 transition-all"
-                >
-                  <Filter className="w-5 h-5" />
-                  Filters
-                </button>
-                {userType === 'brand' && (
-                  <Link
-                    to="/submit-sponsorship"
-                    className="flex items-center gap-2 px-4 py-2 bg-neon-green text-black rounded-lg hover:bg-[#00CC00] transition-all"
-                  >
-                    <Plus className="w-5 h-5" />
-                    New Sponsorship
-                  </Link>
-                )}
-              </div>
-
-              {showFilters && (
-                <motion.div
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white/5 backdrop-blur-lg rounded-lg p-6 mb-8 border border-neon-green/20"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Amount Range (₹)
-                      </label>
-                      <div className="space-y-2">
-                        <input
-                          type="range"
-                          min="100"
-                          max="500000"
-                          step="1000"
-                          value={filters.amount[1]}
-                          onChange={(e) => setFilters(prev => ({ ...prev, amount: [prev.amount[0], parseInt(e.target.value)] }))}
-                          className="w-full accent-neon-green"
-                        />
-                        <div className="flex justify-between text-sm text-gray-400">
-                          <span>₹{filters.amount[0].toLocaleString()}</span>
-                          <span>₹{filters.amount[1].toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Event Category
-                      </label>
-                      <select
-                        value={filters.category}
-                        onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))}
-                        className="w-full px-3 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                      >
-                        <option value="all" className="bg-black">All Categories</option>
-                        {categories.map(category => (
-                          <option key={category} value={category} className="bg-black">
-                            {category}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Application Deadline
-                      </label>
-                      <select
-                        value={filters.deadline}
-                        onChange={(e) => setFilters(prev => ({ ...prev, deadline: e.target.value }))}
-                        className="w-full px-3 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
-                      >
-                        <option value="all" className="bg-black">All Deadlines</option>
-                        <option value="week" className="bg-black">Within 1 Week</option>
-                        <option value="month" className="bg-black">Within 1 Month</option>
-                        <option value="quarter" className="bg-black">Within 3 Months</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex justify-end mt-4">
-                    <button
-                      onClick={() => {
-                        console.log("Resetting all filters");
-                        setFilters({
-                          amount: [100, 500000],
-                          category: 'all',
-                          deadline: 'all'
-                        });
-                        setSearchTerm('');
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 border border-neon-green/20 rounded-lg text-white hover:bg-neon-green/5 transition-all"
-                    >
-                      <X className="w-4 h-4" />
-                      Reset Filters
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-
-            {/* Sort Options */}
-            <div className="flex justify-end mb-6">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => handleSort('amount')}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
-                >
-                  Amount
-                  {sortConfig.key === 'amount' && (
-                    sortConfig.direction === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                  )}
-                </button>
-                <button
-                  onClick={() => handleSort('event_date')}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
-                >
-                  Event Date
-                  {sortConfig.key === 'event_date' && (
-                    sortConfig.direction === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                  )}
-                </button>
-                <button
-                  onClick={() => handleSort('deadline')}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
-                >
-                  Deadline
-                  {sortConfig.key === 'deadline' && (
-                    sortConfig.direction === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Sponsorship Listings */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredSponsorships.length > 0 ? (
-                filteredSponsorships.map((sponsorship) => (
-                  <motion.div
-                    key={sponsorship.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/5 backdrop-blur-lg rounded-xl overflow-hidden border border-neon-green/20 hover:border-neon-green/40 transition-all"
-                  >
-                    <div className="p-6">
-                      {sponsorship.brandLogo && (
-                        <div className="mb-4 flex justify-center">
-                          <img
-                            src={sponsorship.brandLogo}
-                            alt={`${sponsorship.title} brand logo`}
-                            className="w-24 h-24 object-contain rounded-lg bg-white/5 p-2"
-                          />
-                        </div>
-                      )}
-                      <h3 className="text-xl font-semibold text-white mb-4">{sponsorship.title}</h3>
-                      <div className="flex items-center gap-2 text-neon-green mb-4">
-                        <IndianRupee className="w-5 h-5" />
-                        <span className="text-2xl font-semibold">
-                          {sponsorship.amount.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="space-y-3 mb-4">
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <Calendar className="w-4 h-4" />
-                          <span>Category: {sponsorship.event_category || 'Not specified'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <Users className="w-4 h-4" />
-                          <span>Expected Footfall: {sponsorship.expected_footfall?.toLocaleString() || 'Not specified'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <Calendar className="w-4 h-4" />
-                          <span>Event Date: {sponsorship.event_date ? new Date(sponsorship.event_date).toLocaleDateString() : 'Not specified'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <Clock className="w-4 h-4" />
-                          <span>Deadline: {sponsorship.application_deadline ? getTimeLeft(sponsorship.application_deadline) : 'Not specified'}</span>
-                        </div>
-                      </div>
-                      <p className="text-gray-400 line-clamp-2 mb-4">
-                        {sponsorship.description || 'No description provided'}
-                      </p>
-                      
-                      {/* Show accepted status if sponsorship is accepted */}
-                      {sponsorship.isAccepted && userType === 'university' && (
-                        <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-3 mb-4 flex items-center gap-2">
-                          <CheckCircle className="text-neon-green w-4 h-4" />
-                          <p className="text-neon-green text-sm font-medium">You've accepted this sponsorship</p>
-                        </div>
-                      )}
-
-                      <button
-                        onClick={() => openSponsorshipDetails(sponsorship)}
-                        className="flex items-center justify-center gap-2 w-full py-2 mt-4 bg-neon-green/10 border border-neon-green text-neon-green rounded-lg font-semibold hover:bg-neon-green hover:text-black transition-all"
-                      >
-                        <span>View Details</span>
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </motion.div>
-                ))
-              ) : (
-                <div className="col-span-3 text-center py-12">
-                  <p className="text-gray-400 text-lg">No sponsorship opportunities found matching your criteria.</p>
-                  <button
-                    onClick={() => {
-                      console.log("Resetting filters due to no results");
-                      setFilters({
-                        amount: [100, 500000],
-                        category: 'all',
-                        deadline: 'all'
-                      });
-                      setSearchTerm('');
-                    }}
-                    className="mt-4 px-6 py-2 border border-neon-green/20 rounded-lg text-white hover:bg-neon-green/5 transition-all"
-                  >
-                    Reset Filters
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Sponsorship Request Status Tab */}
-        {activeTab === 'status' && (
-          <div className="bg-white/5 backdrop-blur-lg rounded-lg p-8 border border-neon-green/20">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-white mb-4">Sponsorship Request Status</h2>
-              <p className="text-gray-300 mb-6">
-                Track the status of your sponsorship requests submitted to brands.
-              </p>
-            </div>
-            
-            {requestHistoryLoading ? (
-              <div className="flex justify-center items-center h-48">
-                <div className="text-white">Loading request history...</div>
-              </div>
-            ) : requestHistoryError ? (
-              <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-6 flex items-center gap-3">
-                <AlertCircle className="text-red-400 w-6 h-6 flex-shrink-0" />
-                <p className="text-red-400">{requestHistoryError}</p>
-              </div>
-            ) : requestHistory.length === 0 ? (
-              <div className="text-center py-12">
-              <p className="text-gray-400 text-lg">You haven't submitted any sponsorship requests yet.</p>
-              <button
-                onClick={() => setActiveTab('submit')}
-                className="mt-4 px-6 py-2 bg-neon-green/10 border border-neon-green/20 text-neon-green rounded-lg hover:bg-neon-green/20 transition-all"
-              >
-                Submit a Request
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {requestHistory.map((request) => (
-                <RequestCard key={request.id} request={request} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {showModal && selectedSponsorship && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 px-4" onClick={(e) => {
-          // Close modal when clicking outside content area
-          if (e.target === e.currentTarget) setShowModal(false);
-        }}>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-gray-900 border border-neon-green/30 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()} // Prevent clicks inside the modal from closing it
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 cursor-pointer hover:bg-neon-green/5 transition-all"
+            onClick={() => setShowInsightsModal(true)}
           >
-            <div className="sticky top-0 bg-gray-900 border-b border-neon-green/20 p-4 flex justify-between items-center">
-              <h2 className="text-xl font-bold text-white">Sponsorship Details</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white">
-                <X className="w-6 h-6" />
-              </button>
+            <div className="flex items-center justify-between">
+              <div className="p-2 bg-indigo-500/10 rounded-lg">
+                <BarChart3 className="w-6 h-6 text-indigo-500" />
+              </div>
+              <span className="text-sm text-gray-400">Platform Insights</span>
             </div>
-            <div className="p-6">
-              <div className="mb-6">
-                {selectedSponsorship.brandLogo && (
-                  <div className="mb-4 flex justify-center">
-                    <img
-                      src={selectedSponsorship.brandLogo}
-                      alt={`${selectedSponsorship.title} brand logo`}
-                      className="w-32 h-32 object-contain rounded-lg bg-white/5 p-3"
-                    />
-                  </div>
-                )}
-                <h1 className="text-2xl font-bold text-white mb-2">{selectedSponsorship.title}</h1>
-                <div className="flex items-center gap-2 text-neon-green mb-4">
-                  <IndianRupee className="w-6 h-6" />
-                  <span className="text-3xl font-semibold">
-                    {selectedSponsorship.amount.toLocaleString()}
-                  </span>
-                </div>
+            <div className="mt-4">
+              <h3 className="text-3xl font-bold text-white">‎ </h3>
+              <p className="text-gray-400 text-sm mt-2">Click to check insights</p>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 cursor-pointer hover:bg-neon-green/5 transition-all"
+            onClick={() => setShowStudentWaitlistModal(true)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2 bg-purple-500/10 rounded-lg">
+                <Users className="w-6 h-6 text-purple-500" />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-4">Details</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-gray-400 mb-1">Category</p>
-                      <p className="text-white">{selectedSponsorship.event_category || 'Not specified'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 mb-1">Event Date</p>
-                      <p className="text-white">
-                        {selectedSponsorship.event_date ? new Date(selectedSponsorship.event_date).toLocaleDateString() : 'Not specified'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 mb-1">Application Deadline</p>
-                      <p className="text-white">
-                        {selectedSponsorship.application_deadline ? (
-                          <>
-                            {new Date(selectedSponsorship.application_deadline).toLocaleDateString()}
-                            <span className="ml-2 px-2 py-1 bg-neon-green/10 text-neon-green text-xs rounded-full">
-                              {getTimeLeft(selectedSponsorship.application_deadline)}
-                            </span>
-                          </>
-                        ) : 'Not specified'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 mb-1">Expected Footfall</p>
-                      <p className="text-white">{selectedSponsorship.expected_footfall?.toLocaleString() || 'Not specified'}</p>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-4">Description</h3>
-                  <p className="text-gray-300 whitespace-pre-line">
-                    {selectedSponsorship.description || 'No description provided'}
-                  </p>
-                  <h3 className="text-lg font-semibold text-white mt-6 mb-4">Requirements</h3>
-                  <p className="text-gray-300 whitespace-pre-line">
-                    {selectedSponsorship.requirements || 'No specific requirements provided'}
-                  </p>
-                  <h3 className="text-lg font-semibold text-white mt-6 mb-4">Target Criteria</h3>
-                  <p className="text-gray-300 whitespace-pre-line">
-                    {selectedSponsorship.target_criteria || 'No target criteria specified'}
-                  </p>
-                </div>
+              <span className="text-sm text-gray-400">Student Waitlist</span>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-3xl font-bold text-white">{stats.totalUniversities}</h3>
+              <p className="text-gray-400 text-sm mt-2">Click to view details</p>
+            </div>
+          </motion.div>
+
+          <motion.div
+           initial={{ opacity: 0, y: 20 }}
+           animate={{ opacity: 1, y: 0 }}
+           transition={{ delay: 0.2 }}
+           className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 cursor-pointer hover:bg-neon-green/5 transition-all"
+           onClick={() => setShowPendingRequestsModal(true)}
+         >
+           <div className="flex items-center justify-between">
+             <div className="p-2 bg-yellow-500/10 rounded-lg">
+               <Clock className="w-6 h-6 text-yellow-500" />
+             </div>
+             <span className="text-sm text-gray-400">Pending Requests</span>
+           </div>
+           <div className="mt-4">
+             <h3 className="text-3xl font-bold text-white">{stats.pendingRequests}</h3>
+             <p className="text-gray-400 text-sm mt-2">Click to view details</p>
+           </div>
+         </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 cursor-pointer hover:bg-neon-green/5 transition-all"
+            onClick={() => setShowApprovedSponsorshipsModal(true)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2 bg-green-500/10 rounded-lg">
+                <Activity className="w-6 h-6 text-green-500" />
               </div>
-              {/* Accept Sponsorship Section */}
-              {userType === 'university' && (
-                <div className="mt-8 border-t border-neon-green/20 pt-6">
-                  {!profileComplete ? (
-                    <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4 flex items-center gap-3">
-                      <AlertCircle className="text-amber-400 w-6 h-6 flex-shrink-0" />
-                      <div className="flex-1">
-                        <p className="text-amber-400 font-medium">Complete your profile first</p>
-                        <p className="text-amber-300/80 text-sm mt-1">
-                          You need to complete your university profile before you can accept sponsorships.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setActiveTab('profile');
-                          setShowModal(false);
-                        }}
-                        className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg transition-colors whitespace-nowrap"
-                      >
-                        Complete Profile
-                      </button>
-                    </div>
-                  ) : alreadyAccepted ? (
-                    <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4 flex items-center gap-3">
-                      <CheckCircle className="text-neon-green w-6 h-6" />
-                      <p className="text-neon-green font-medium">You have already accepted this sponsorship opportunity.</p>
-                    </div>
-                  ) : acceptSuccess ? (
-                    <div className="bg-neon-green/10 border border-neon-green/30 rounded-lg p-4 flex items-center gap-3">
-                      <CheckCircle className="text-neon-green w-6 h-6" />
-                      <p className="text-neon-green font-medium">Sponsorship accepted successfully! The brand will contact you soon.</p>
-                    </div>
-                  ) : (
-                    <>
-                      <h3 className="text-lg font-semibold text-white mb-4">Accept This Sponsorship</h3>
-                      <p className="text-gray-400 mb-4">
-                        By accepting this sponsorship, you agree to the requirements and will be contacted by the brand for further details.
-                      </p>
-                      {acceptError && (
-                        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-4 flex items-center gap-3">
-                          <XCircle className="text-red-500 w-6 h-6" />
-                          <p className="text-red-500">{acceptError}</p>
-                        </div>
-                      )}
-                      <button
-                        onClick={handleAcceptSponsorship}
-                        disabled={acceptLoading}
-                        className={`flex items-center justify-center gap-2 w-full md:w-auto px-8 py-3 bg-neon-green text-black rounded-lg font-semibold hover:bg-[#00CC00] transition-all ${
-                          acceptLoading ? 'opacity-70 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        {acceptLoading ? 'Processing...' : 'Accept Sponsorship'}
-                        {!acceptLoading && <CheckCircle className="w-5 h-5" />}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
+              <span className="text-sm text-gray-400">Total Sponsorships</span>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-3xl font-bold text-white">{stats.totalSponshorships}</h3>
+              <p className="flex items-center mt-2 text-sm">
+                <span className="text-gray-400 ml-2">Click to View Sponsorships</span>
+              </p>
             </div>
           </motion.div>
         </div>
+
+        {/* Credentials Management */}
+        <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Predefined Credentials</h2>
+              <p className="text-gray-400">Manage university and brand login credentials</p>
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowPasswords(prev => {
+                  const allUsernames = credentials.map(c => c.username);
+                  return Object.keys(prev).length > 0 
+                    ? {} 
+                    : Object.fromEntries(allUsernames.map(u => [u, true]));
+                })}
+                className="p-2 rounded-lg border border-neon-green/20 text-white hover:bg-neon-green/5 transition-all"
+                title={Object.keys(showPasswords).length > 0 ? "Hide All Passwords" : "Show All Passwords"}
+              >
+                {Object.keys(showPasswords).length > 0 ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  const csvData = credentials.map(cred => ({
+                    Username: cred.username,
+                    Password: cred.password,
+                    Type: cred.user_type,
+                    Status: cred.is_assigned ? 'Assigned' : 'Available',
+                    'Assigned To': cred.assigned_to || '',
+                    'Last Used': cred.last_used || ''
+                  }));
+
+                  const csvContent = [
+                    Object.keys(csvData[0]).join(','),
+                    ...csvData.map(row => Object.values(row).join(','))
+                  ].join('\n');
+
+                  const blob = new Blob([csvContent], { type: 'text/csv' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `credentials-${new Date().toISOString().split('T')[0]}.csv`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                }}
+                className="p-2 rounded-lg border border-neon-green/20 text-white hover:bg-neon-green/5 transition-all"
+                title="Export Credentials"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search by username or assigned to..."
+                value={credentialSearch}
+                onChange={(e) => setCredentialSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
+              />
+            </div>
+            <select
+              value={credentialFilter}
+              onChange={(e) => setCredentialFilter(e.target.value)}
+              className="px-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none"
+            >
+              <option value="all" className="bg-black">All Credentials</option>
+              <option value="university" className="bg-black">Universities</option>
+              <option value="brand" className="bg-black">Brands</option>
+              <option value="assigned" className="bg-black">Assigned</option>
+              <option value="available" className="bg-black">Available</option>
+            </select>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left border-b border-white/10">
+                  <th className="p-4 text-gray-400 font-medium">Username</th>
+                  <th className="p-4 text-gray-400 font-medium">Password</th>
+                  <th className="p-4 text-gray-400 font-medium">Type</th>
+                  <th className="p-4 text-gray-400 font-medium">Status</th>
+                  <th className="p-4 text-gray-400 font-medium">Assigned To</th>
+                  <th className="p-4 text-gray-400 font-medium">Last Used</th>
+                  <th className="p-4 text-gray-400 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCredentials.map((cred) => (
+                  <tr key={cred.username} className="border-b border-white/10">
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-mono">{cred.username}</span>
+                        <button
+                          onClick={() => handleCopy(cred.username, cred.username, 'username')}
+                          className="p-1 text-gray-400 hover:text-white transition-colors"
+                          title="Copy Username"
+                        >
+                          {copiedItem?.id === cred.username && copiedItem?.type === 'username' ? (
+                            <Check className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-white">
+                          {showPasswords[cred.username] ? cred.password : '••••••••'}
+                        </span>
+                        <button
+                          onClick={() => setShowPasswords(prev => ({
+                            ...prev,
+                            [cred.username]: !prev[cred.username]
+                          }))}
+                          className="p-1 text-gray-400 hover:text-white transition-colors"
+                          title={showPasswords[cred.username] ? "Hide Password" : "Show Password"}
+                        >
+                          {showPasswords[cred.username] ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleCopy(cred.password, cred.username, 'password')}
+                          className="p-1 text-gray-400 hover:text-white transition-colors"
+                          title="Copy Password"
+                        >
+                          {copiedItem?.id === cred.username && copiedItem?.type === 'password' ? (
+                            <Check className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        cred.user_type === 'university'
+                          ? 'bg-purple-500/20 text-purple-500'
+                          : 'bg-blue-500/20 text-blue-500'
+                      }`}>
+                        {cred.user_type.charAt(0).toUpperCase() + cred.user_type.slice(1)}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        cred.is_assigned 
+                          ? 'bg-green-500/20 text-green-500' 
+                          : 'bg-yellow-500/20 text-yellow-500'
+                      }`}>
+                        {cred.is_assigned ? 'Assigned' : 'Available'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-gray-400">
+                      {cred.assigned_to || '-'}
+                    </td>
+                    <td className="p-4 text-gray-400">
+                      {cred.last_used ? new Date(cred.last_used).toLocaleString() : 'Never'}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="p-1 text-gray-400 hover:text-white transition-colors"
+                          title="View Details"
+                        >
+                          <Key className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Activity Logs */}
+        <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20">
+          <h2 className="text-xl font-semibold text-white mb-6">Recent Activity</h2>
+          <div className="space-y-4">
+            {activityLogs.map((log: any) => (
+              <div
+                key={log.id}
+                className="flex items-start gap-4 p-4 bg-white/5 rounded-lg border border-neon-green/10"
+              >
+                <div className={`p-2 rounded-lg ${
+                  log.action === 'approved'
+                    ? 'bg-green-500/10'
+                    : log.action === 'rejected'
+                    ? 'bg-red-500/10'
+                    : 'bg-blue-500/10'
+                }`}>
+                  {log.action === 'approved' ? (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  ) : log.action === 'rejected' ? (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-blue-500" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-white">
+                    <span className="font-medium">
+                      {log.action.charAt(0).toUpperCase() + log.action.slice(1)}
+                    </span>{' '}
+                    - {log.sponsorship_requests?.title}
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    {new Date(log.created_at).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Pending Requests Modal */}
+      {showPendingRequestsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/95 rounded-xl border border-neon-green/20 p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white">Pending Sponsorship Requests</h2>
+              <button
+                onClick={() => setShowPendingRequestsModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left border-b border-white/10">
+                    <th className="p-4 text-gray-400 font-medium">Title</th>
+                    <th className="p-4 text-gray-400 font-medium">Category</th>
+                    <th className="p-4 text-gray-400 font-medium">Amount</th>
+                    <th className="p-4 text-gray-400 font-medium">Event Date</th>
+                    <th className="p-4 text-gray-400 font-medium">Deadline</th>
+                    <th className="p-4 text-gray-400 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingRequests.map((request) => (
+                    <tr key={request.id} className="border-b border-white/10">
+                      <td className="p-4">
+                        <div>
+                          <p className="text-white font-medium">{request.title}</p>
+                          <p className="text-gray-400 text-sm mt-1">{request.description.slice(0, 50)}...</p>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="px-2 py-1 bg-blue-500/10 text-blue-500 rounded-full text-xs">
+                          {request.event_category}
+                        </span>
+                      </td>
+                      <td className="p-4 text-white">₹{request.amount.toLocaleString()}</td>
+                      <td className="p-4 text-gray-400">
+                        {new Date(request.event_date).toLocaleDateString()}
+                      </td>
+                      <td className="p-4 text-gray-400">
+                        {new Date(request.application_deadline).toLocaleDateString()}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setSelectedRequest(request)}
+                            className="p-2 bg-neon-green/10 text-neon-green rounded-lg hover:bg-neon-green/20 transition-all"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* Request Details Modal */}
+      {selectedRequest && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/95 rounded-xl border border-neon-green/20 p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white">Request Details</h2>
+              <button
+                onClick={() => setSelectedRequest(null)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-2">{selectedRequest.title}</h3>
+                <p className="text-gray-400">{selectedRequest.description}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-gray-400">Event Category</p>
+                  <p className="text-white font-medium">{selectedRequest.event_category}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">Amount Requested</p>
+                  <p className="text-white font-medium">₹{selectedRequest.amount.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">Expected Footfall</p>
+                  <p className="text-white font-medium">{selectedRequest.expected_footfall.toLocaleString()} attendees</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">Event Date</p>
+                  <p className="text-white font-medium">{new Date(selectedRequest.event_date).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">Application Deadline</p>
+                  <p className="text-white font-medium">{new Date(selectedRequest.application_deadline).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">Status</p>
+                  <span className="px-2 py-1 bg-yellow-500/10 text-yellow-500 rounded-full text-sm">
+                    {selectedRequest.status.charAt(0).toUpperCase() + selectedRequest.status.slice(1)}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-white font-medium mb-2">Requirements</h4>
+                <p className="text-gray-400">{selectedRequest.requirements}</p>
+              </div>
+
+              <div>
+                <h4 className="text-white font-medium mb-2">Target Criteria</h4>
+                <p className="text-gray-400">{selectedRequest.target_criteria}</p>
+              </div>
+
+              <div className="flex gap-4 justify-end pt-4 border-t border-white/10">
+                <button
+                  onClick={() => handleRequestAction(selectedRequest.id, 'rejected')}
+                  disabled={!!processingRequestId}
+                  className="px-4 py-2 text-white bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-all disabled:opacity-50"
+                >
+                  {processingRequestId === selectedRequest.id ? 'Processing...' : 'Reject'}
+                </button>
+                <button
+                  onClick={() => setShowFeedbackModal(true)}
+                  disabled={!!processingRequestId}
+                  className="px-4 py-2 text-white bg-yellow-500/20 hover:bg-yellow-500/30 rounded-lg transition-all disabled:opacity-50"
+                >
+                  Request Changes
+                </button>
+                <button
+                  onClick={() => handleRequestAction(selectedRequest.id, 'approved')}
+                  disabled={!!processingRequestId}
+                  className="px-4 py-2 text-white bg-green-500/20 hover:bg-green-500/30 rounded-lg transition-all disabled:opacity-50"
+                >
+                  {processingRequestId === selectedRequest.id ? 'Processing...' : 'Approve'}
+                </button>
+                <button
+                  onClick={() => setSelectedRequest(null)}
+                  disabled={!!processingRequestId}
+                  className="px-4 py-2 text-white bg-white/5 hover:bg-white/10 rounded-lg transition-all disabled:opacity-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && selectedRequest && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-black/95 rounded-xl border border-neon-green/20 p-6 max-w-lg w-full">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white">Request Changes</h2>
+              <button
+                onClick={() => setShowFeedbackModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Requesting Changes for {selectedRequest.title}
+                </label>
+                <textarea
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="Enter your feedback here..."
+                  rows={4}
+                  className="w-full px-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white focus:border-neon-green/40 focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex gap-4 justify-end">
+                <button
+                  onClick={() => setShowFeedbackModal(false)}
+                  className="px-4 py-2 text-white bg-white/5 hover:bg-white/10 rounded-lg transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFeedback}
+                  disabled={!feedbackText.trim() || !!processingRequestId}
+                  className="px-4 py-2 text-white bg-neon-green/20 hover:bg-neon-green/30 rounded-lg transition-all disabled:opacity-50"
+                >
+                  {processingRequestId === selectedRequest.id ? 'Submitting...' : 'Submit Feedback'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Student Waitlist Modal */}
+      {showStudentWaitlistModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-black/95 rounded-xl border border-neon-green/20 p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white">Student Waitlist</h2>
+              <button
+                onClick={() => setShowStudentWaitlistModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left border-b border-white/10">
+                    <th className="p-4 text-gray-400 font-medium">Name</th>
+                    <th className="p-4 text-gray-400 font-medium">Email</th>
+                    <th className="p-4 text-gray-400 font-medium">Phone</th>
+                    <th className="p-4 text-gray-400 font-medium">University</th>
+                    <th className="p-4 text-gray-400 font-medium">Sign Up Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.studentWaitlist.map((student) => (
+                    <tr key={student.id} className="border-b border-white/10">
+                      <td className="p-4 text-white">{student.name}</td>
+                      <td className="p-4 text-white">{student.email}</td>
+                      <td className="p-4 text-white">{student.phone}</td>
+                      <td className="p-4 text-white">{student.university}</td>
+                      <td className="p-4 text-gray-400">
+                        {new Date(student.created_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+     {/* Approved Sponsorships Modal */}
+     {showApprovedSponsorshipsModal && (
+       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+         <div className="bg-black/95 rounded-xl border border-neon-green/20 p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+           <div className="flex justify-between items-center mb-6">
+             <h2 className="text-2xl font-bold text-white">Approved Sponsorships</h2>
+             <button
+               onClick={() => setShowApprovedSponsorshipsModal(false)}
+               className="text-gray-400 hover:text-white transition-colors"
+             >
+               <XCircle className="w-6 h-6" />
+             </button>
+           </div>
+
+           <div className="overflow-x-auto">
+             <table className="w-full">
+               <thead>
+                 <tr className="text-left border-b border-white/10">
+                   <th className="p-4 text-gray-400 font-medium">Title</th>
+                   <th className="p-4 text-gray-400 font-medium">Description</th>
+                   <th className="p-4 text-gray-400 font-medium">Amount</th>
+                   <th className="p-4 text-gray-400 font-medium">Requirements</th>
+                   <th className="p-4 text-gray-400 font-medium">Target Criteria</th>
+                   <th className="p-4 text-gray-400 font-medium">Event Date</th>
+                   <th className="p-4 text-gray-400 font-medium">Category</th>
+                   <th className="p-4 text-gray-400 font-medium">Footfall</th>
+                   <th className="p-4 text-gray-400 font-medium">Deadline</th>
+                   <th className="p-4 text-gray-400 font-medium">Reviewer ID</th>
+                   <th className="p-4 text-gray-400 font-medium">Review Date</th>
+                   <th className="p-4 text-gray-400 font-medium">Created At</th>
+                   <th className="p-4 text-gray-400 font-medium">Submitted By</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 {approvedSponsorships.map((sponsorship) => (
+                   <tr key={sponsorship.id} className="border-b border-white/10">
+                     <td className="p-4 text-white">{sponsorship.title}</td>
+                     <td className="p-4 text-white max-w-xs truncate">{sponsorship.description}</td>
+                     <td className="p-4 text-white">₹{sponsorship.amount.toLocaleString()}</td>
+                     <td className="p-4 text-white max-w-xs truncate">{sponsorship.requirements}</td>
+                     <td className="p-4 text-white max-w-xs truncate">{sponsorship.target_criteria}</td>
+                     <td className="p-4 text-white">{new Date(sponsorship.event_date).toLocaleDateString()}</td>
+                     <td className="p-4 text-white">{sponsorship.event_category}</td>
+                     <td className="p-4 text-white">{sponsorship.expected_footfall.toLocaleString()}</td>
+                     <td className="p-4 text-white">{new Date(sponsorship.application_deadline).toLocaleDateString()}</td>
+                     <td className="p-4 text-white">{sponsorship.reviewer_id || '-'}</td>
+                     <td className="p-4 text-white">{sponsorship.review_date ? new Date(sponsorship.review_date).toLocaleString() : '-'}</td>
+                     <td className="p-4 text-white">{new Date(sponsorship.created_at).toLocaleString()}</td>
+                     <td className="p-4 text-white">{sponsorship.user_id}</td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           </div>
+         </div>
+       </div>
+     )}
+
+     {/* Insights Modal */}
+     {showInsightsModal && (
+       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+         <div className="bg-black/95 rounded-xl border border-neon-green/20 p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+           <div className="flex justify-between items-center mb-6">
+             <h2 className="text-2xl font-bold text-white">Platform Insights</h2>
+             <button
+               onClick={() => setShowInsightsModal(false)}
+               className="text-gray-400 hover:text-white transition-colors"
+             >
+               <XCircle className="w-6 h-6" />
+             </button>
+           </div>
+
+           <div className="grid grid-cols-2 gap-6 mb-8">
+             <div
+               className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 cursor-pointer hover:bg-neon-green/5 transition-all"
+               onClick={() => setShowUniversitiesModal(true)}
+             >
+               <div className="flex items-center justify-between mb-4">
+                 <div className="p-2 bg-purple-500/10 rounded-lg">
+                   <School className="w-6 h-6 text-purple-500" />
+                 </div>
+                 <span className="text-sm text-gray-400">Active Universities</span>
+               </div>
+               <h3 className="text-3xl font-bold text-white">{insightsData.totalUniversities}</h3>
+             </div>
+
+             <div
+               className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 cursor-pointer hover:bg-neon-green/5 transition-all"
+               onClick={() => setShowBrandsModal(true)}
+             >
+               <div className="flex items-center justify-between mb-4">
+                 <div className="p-2 bg-blue-500/10 rounded-lg">
+                   <Building2 className="w-6 h-6 text-blue-500" />
+                 </div>
+                 <span className="text-sm text-gray-400">Active Brands</span>
+               </div>
+               <h3 className="text-3xl font-bold text-white">{insightsData.totalBrands}</h3>
+             </div>
+
+             {/* Universities Modal */}
+             {showUniversitiesModal && (
+               <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+                 <div className="bg-black/95 rounded-xl border border-neon-green/20 p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                   <div className="flex justify-between items-center mb-6">
+                     <h2 className="text-2xl font-bold text-white">Universities</h2>
+                     <button onClick={() => setShowUniversitiesModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                       <XCircle className="w-6 h-6" />
+                     </button>
+                   </div>
+                   <div className="overflow-x-auto">
+                     <table className="w-full">
+                       <thead>
+                         <tr className="text-left border-b border-white/10">
+                           <th className="p-4 text-gray-400 font-medium">Username</th>
+                           <th className="p-4 text-gray-400 font-medium">Password</th>
+                           <th className="p-4 text-gray-400 font-medium">Created At</th>
+                         </tr>
+                       </thead>
+                       <tbody>
+                         {credentials.filter(cred => cred.user_type === 'university').map(cred => (
+                           <tr key={cred.username} className="border-b border-white/10">
+                             <td className="p-4">
+                               <div className="flex items-center gap-2">
+                                 <span className="text-white font-mono">{cred.username}</span>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     handleCopy(cred.username, cred.username, 'username');
+                                   }}
+                                   className="p-1 text-gray-400 hover:text-white transition-colors"
+                                 >
+                                   {copiedItem?.id === cred.username && copiedItem?.type === 'username' ? (
+                                     <Check className="w-4 h-4 text-green-500" />
+                                   ) : (
+                                     <Copy className="w-4 h-4" />
+                                   )}
+                                 </button>
+                               </div>
+                             </td>
+                             <td className="p-4">
+                               <div className="flex items-center gap-2">
+                                 <span className="text-white font-mono">{cred.password}</span>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     handleCopy(cred.password, cred.username, 'password');
+                                   }}
+                                   className="p-1 text-gray-400 hover:text-white transition-colors"
+                                 >
+                                   {copiedItem?.id === cred.username && copiedItem?.type === 'password' ? (
+                                     <Check className="w-4 h-4 text-green-500" />
+                                   ) : (
+                                     <Copy className="w-4 h-4" />
+                                   )}
+                                 </button>
+                               </div>
+                             </td>
+                             <td className="p-4 text-gray-400">{new Date(cred.created_at).toLocaleDateString()}</td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                 </div>
+               </div>
+             )}
+
+             {/* Brands Modal */}
+             {showBrandsModal && (
+               <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+                 <div className="bg-black/95 rounded-xl border border-neon-green/20 p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                   <div className="flex justify-between items-center mb-6">
+                     <h2 className="text-2xl font-bold text-white">Brands</h2>
+                     <button onClick={() => setShowBrandsModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                       <XCircle className="w-6 h-6" />
+                     </button>
+                   </div>
+                   <div className="overflow-x-auto">
+                     <table className="w-full">
+                       <thead>
+                         <tr className="text-left border-b border-white/10">
+                           <th className="p-4 text-gray-400 font-medium">Username</th>
+                           <th className="p-4 text-gray-400 font-medium">Password</th>
+                           <th className="p-4 text-gray-400 font-medium">Created At</th>
+                         </tr>
+                       </thead>
+                       <tbody>
+                         {credentials.filter(cred => cred.user_type === 'brand').map(cred => (
+                           <tr key={cred.username} className="border-b border-white/10">
+                             <td className="p-4 text-white">{cred.username}</td>
+                             <td className="p-4 text-white">{cred.password}</td>
+                             <td className="p-4 text-white">{new Date(cred.created_at).toLocaleString()}</td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                 </div>
+               </div>
+             )}
+           </div>
+
+           <div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20">
+             <h3 className="text-xl font-semibold text-white mb-6">Student Signups Over Time</h3>
+             {insightsData.signups.length > 0 ? (
+               <div className="h-80 w-full">
+                 <ResponsiveContainer width="100%" height="100%">
+                   <BarChart data={insightsData.signups}>
+                     <XAxis
+                       dataKey="date"
+                       stroke="#9ca3af"
+                       tick={{ fill: '#9ca3af' }}
+                     />
+                     <YAxis
+                       stroke="#9ca3af"
+                       tick={{ fill: '#9ca3af' }}
+                     />
+                     <Tooltip
+                       contentStyle={{
+                         backgroundColor: '#000',
+                         border: '1px solid rgba(74, 222, 128, 0.2)',
+                         borderRadius: '0.5rem'
+                       }}
+                       labelStyle={{ color: '#fff' }}
+                       itemStyle={{ color: '#6366f1' }}
+                     />
+                     <Bar
+                       dataKey="count"
+                       fill="#6366f1"
+                       radius={[4, 4, 0, 0]}
+                     />
+                   </BarChart>
+                 </ResponsiveContainer>
+               </div>
+             ) : (
+               <p className="text-gray-400 text-center">No signup data available</p>
+             )}
+           </div>
+         </div>
+       </div>
+     )}
     </div>
-  </div>
-);
+  );
 };
 
-export default Sponsorships;
+export default Admin;
 
-inside the request status tab the view details button is not functional as of now.
+in this page can you make the following changes?
 
-i want it to display a new modal when clicked with all related data we have about the request.
-and the brand details too in the modal.
+in the pending request card i also want to display the request raised by the universities.
+        - change the existing heading from "Pending Sponsorship Requests" to "Pending Sponsorship Requests by brands"
+        - add another section below with heading "Pending Sponsorship Requests by universities" and display the pending requests raised by universities in that section.
 
-only if the status is changes_requested then the user will be able to edit the data and resubmit the request.
-for any other status the data in the modal should remain read only.
+        the data regarding this will be fetched from this table in supabase:
+        create table public.sponsership_requests_university (
+          id uuid not null default gen_random_uuid (),
+          created_at timestamp with time zone not null default now(),
+          company_id text null,
+          description text null,
+          amount text null,
+          event_date text null,
+          event_category text null,
+          accepted_by text null,
+          reviewer_id text null,
+          review_date text null,
+          status text null,
+          feedback text null,
+          university_id text null,
+          university_name text null,
+          university_url text null,
+          constraint sponsership_requests_university_pkey primary key (id)
+        ) TABLESPACE pg_default;
 
-the modal should have a button to close and submit.
-upon submit that changes should reflect in the databse as well.
+        similer to the "Pending Sponsorship Requests by brands" section, the "Pending Sponsorship Requests by universities" section should also have a button to view the details of the request.
+        and upon click the details of that request should be displayed in a modal.
 
-the feedback should be displayed in the modal as that will be the feedback from admin to the user.
-and the user can see the feedback and make changes accordingly.
+        the modal should have the following buttons:
+        - Approve
+        - changes requested
+        - close
 
-write me the whole code .
+        pressing any of them will update the status in database.
+        upon pressing changes requested, a text area should be displayed to enter the feedback and a submit button to submit the feedback, similer to the existing feedback modal.
+        the feedback should be added to the feedback column in the table.
+
+        we also have to update these:
+          reviewer_id text null,
+          review_date text null, 
+        where reviewed_by refers to the admin id and the review_date should be the current date and time.
+
+generate me the whole code 
