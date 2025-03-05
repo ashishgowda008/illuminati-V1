@@ -14,7 +14,7 @@ Welcome to Illuminatii\\! These Terms of Service govern your access to and use o
 
 ### 2\\. Definitions
 
-* **"Platform"** refers to Illuminatii, accessible via illuminatii.com.  
+* **"Platform"** refers to Illuminatii, accessible via illuminatii.in.  
 * **"User"** refers to students, colleges, and brands using our services.  
 * **"Sponsorship"** means financial, product-based, or promotional support provided by brands to students/colleges.  
 * **"Content"** includes user-generated text, images, event listings, and sponsorship proposals.

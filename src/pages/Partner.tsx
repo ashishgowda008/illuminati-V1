@@ -1,6 +1,6 @@
 import React, { useState, FormEvent } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Mail, Phone, MapPin, Instagram, Linkedin, Twitter, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, Mail, Phone, MapPin, Instagram, Linkedin, Youtube, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 const Partner = () => {
@@ -268,17 +268,14 @@ const Partner = () => {
             <div className="mt-6 pt-6 border-t border-white/10">
               <h3 className="text-white font-medium mb-4">Connect With Us</h3>
               <div className="flex space-x-4">
-                <a href="#" className="text-gray-400 hover:text-neon-green transition-colors">
+                <a href="https://www.instagram.com/official.illuminatii?igsh=MWtscDhsZjVtaHM5eQ%3D%3D&utm_source=qr" className="text-gray-400 hover:text-neon-green transition-colors">
                   <Instagram size={24} />
                 </a>
-                <a href="#" className="text-gray-400 hover:text-neon-green transition-colors">
+                <a href="https://linkedin.com" className="text-gray-400 hover:text-neon-green transition-colors">
                   <Linkedin size={24} />
                 </a>
-                <a href="#" className="text-gray-400 hover:text-neon-green transition-colors">
-                  <Twitter size={24} />
-                </a>
-                <a href="#" className="text-gray-400 hover:text-neon-green transition-colors">
-                  <MessageSquare size={24} />
+                <a href="https://www.youtube.com/@Illuminatii-c4e" className="text-gray-400 hover:text-neon-green transition-colors">
+                  <Youtube size={24} />
                 </a>
               </div>
             </div>

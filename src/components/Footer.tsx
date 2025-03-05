@@ -84,7 +84,7 @@ const Footer = () => {
                 <Linkedin className="w-5 h-5" />
               </a>
               <a 
-                href="#" 
+                href="https://www.youtube.com/@Illuminatii-c4e" 
                 className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-lg"
                 aria-label="YouTube"
               >

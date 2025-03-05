@@ -54,7 +54,16 @@ added admin confirmation for requested sponsorships in admin panel.
 
 added requested sponsorship tab for brands to approve/reject/request changes 
 
+
+update the photos/ names and update the yt link.
+
+update the links - yt, insta and linkdin
+
 ------------
+
+add a pdf submit in uni sign up (50 mb limit) (mandatory)
+
+in admin panel add a button (download as csv) in approved sponcerships
 
 
 

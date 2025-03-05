@@ -46,29 +46,17 @@ const About = () => {
     {
       name: "Amruth",
       role: "Co-Founder & CEO",
-      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80",
       bio: "Passionate about bridging the gap between college events and brand partnerships. Previously worked with multiple startups in the education sector."
     },
     {
       name: "Rahul",
       role: "Co-Founder & CTO",
-      image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80",
       bio: "Tech enthusiast with a vision to revolutionize the sponsorship landscape. Expert in building scalable platforms and digital solutions."
-    }
-  ];
-
-  const advisors = [
-    {
-      name: "Priya Sharma",
-      role: "Marketing Advisor",
-      image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80",
-      bio: "15+ years of experience in digital marketing and brand partnerships."
     },
     {
-      name: "Rajesh Kumar",
-      role: "Industry Expert",
-      image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80",
-      bio: "Former VP of Events at leading corporations, bringing valuable industry insights."
+      name: "Utsav",
+      role: "CMO",
+      bio: "Leading the marketing and growth initiatives at Illuminatii."
     }
   ];
 
@@ -145,53 +133,20 @@ const About = () => {
             <p className="text-gray-300">The visionaries behind Illuminatii</p>
           </div>
 
-          {/* Founders */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+          {/* Team Members */}
+          <div className="grid grid-cols-3 gap-8 max-w-5xl mx-auto">
             {teamMembers.map((member, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.2 }}
-                className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 hover:border-neon-green/40 transition-all"
+                className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 hover:border-neon-green/40 transition-all w-full"
               >
-                <div className="flex items-start space-x-4">
-                  <img
-                    src={member.image}
-                    alt={member.name}
-                    className="w-24 h-24 rounded-lg object-cover"
-                  />
-                  <div>
-                    <h3 className="text-xl font-semibold text-white">{member.name}</h3>
-                    <p className="text-neon-green mb-2">{member.role}</p>
-                    <p className="text-gray-300 text-sm">{member.bio}</p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Advisors */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {advisors.map((advisor, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.2 + 0.4 }}
-                className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-neon-green/20 hover:border-neon-green/40 transition-all"
-              >
-                <div className="flex items-start space-x-4">
-                  <img
-                    src={advisor.image}
-                    alt={advisor.name}
-                    className="w-20 h-20 rounded-lg object-cover"
-                  />
-                  <div>
-                    <h3 className="text-xl font-semibold text-white">{advisor.name}</h3>
-                    <p className="text-neon-green mb-2">{advisor.role}</p>
-                    <p className="text-gray-300 text-sm">{advisor.bio}</p>
-                  </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">{member.name}</h3>
+                  <p className="text-neon-green mb-2">{member.role}</p>
+                  <p className="text-gray-300 text-sm">{member.bio}</p>
                 </div>
               </motion.div>
             ))}

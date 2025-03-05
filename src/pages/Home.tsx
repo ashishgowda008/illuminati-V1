@@ -157,20 +157,20 @@ useEffect(() => {
                 </span>
               </h1>
               <p className="text-xl text-gray-300 mb-8">
-                India's first-ever exclusive platform where students, universities, and brands collaborate for event sponsorships.
+                India's first-ever exclusive platform where students, universities, and brands collaborate for college event sponsorships.
               </p>
               <div className="flex flex-col gap-6 mb-8">
                 <div className="text-2xl text-neon-green font-bold">
                   Students waitlist: {displayCount}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Link to="/waitlist" className="neon-button px-8 py-4 rounded-lg flex items-center justify-center gap-2">
-                    Join Waitlist <ArrowRight size={20} />
-                  </Link>
-                  <Link to="/sponsorships" className="px-8 py-4 bg-white/5 backdrop-blur-md text-white rounded-lg font-semibold hover:bg-white/10 transition-all border border-neon-green/20">
-                    Explore Sponsorships
-                  </Link>
-                </div>
+                <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start w-full sm:w-auto">
+                <Link to="/waitlist" className="neon-button px-8 py-4 rounded-lg flex items-center justify-center gap-2 w-full sm:w-auto">
+                  Join Waitlist <ArrowRight size={20} />
+                </Link>
+                <Link to="/sponsorships" className="px-8 py-4 bg-white/5 backdrop-blur-md text-white rounded-lg font-semibold hover:bg-white/10 transition-all border border-neon-green/20 w-full sm:w-auto text-center">
+                  Explore Sponsorships
+                </Link>
+              </div>
               </div>
             </motion.div>
             
@@ -287,11 +287,6 @@ useEffect(() => {
                 <Quote className="w-8 h-8 text-neon-green mb-4 opacity-50" />
                 <p className="text-gray-300 mb-6 italic">{testimonial.quote}</p>
                 <div className="flex items-center">
-                  <img
-                    src={testimonial.image}
-                    alt={testimonial.name}
-                    className="w-12 h-12 rounded-full mr-4"
-                  />
                   <div>
                     <h4 className="text-white font-semibold">{testimonial.name}</h4>
                     <p className="text-neon-green text-sm">{testimonial.role}</p>
