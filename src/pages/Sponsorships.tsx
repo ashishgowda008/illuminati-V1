@@ -93,7 +93,8 @@ interface UniversityProfile {
     created_at?: string | null;
     updated_at?: string | null;
     is_complete?: boolean | null;
-    logo?: string | null; // Changed from 'crest' to 'logo'
+    logo?: string | null;
+    document?: string | null; // Added document field for PDF/docs storage
 }
 
 interface FilterState {
@@ -152,7 +153,9 @@ const Sponsorships = () => {
     const [profileError, setProfileError] = useState('');
     const [profileSuccess, setProfileSuccess] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const documentInputRef = useRef<HTMLInputElement>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [documentName, setDocumentName] = useState<string | null>(null);
 
     // Request history state for Status tab
     const [requestHistory, setRequestHistory] = useState<SponsorshipRequest[]>([]);
@@ -374,8 +377,13 @@ const Sponsorships = () => {
             if (data) {
                 setProfile(data);
                 setProfileComplete(data.is_complete || false);
-                if (data.logo) { // Check for 'logo' instead of 'crest'
+                if (data.logo) {
                     setPreviewImage(data.logo);
+                }
+                if (data.document) {
+                    // Extract original filename from the URL path
+                    const fileName = decodeURIComponent(data.document.split('/').pop() || 'document');
+                    setDocumentName(fileName);
                 }
             } else {
                 // Initialize a new profile with the username
@@ -392,6 +400,68 @@ const Sponsorships = () => {
         }
     };
 
+    const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Check file size (max 50 MB)
+        if (file.size > 50 * 1024 * 1024) {
+            setProfileError('Document size should be less than 50MB');
+            return;
+        }
+
+        // Check file type
+        const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        if (!allowedTypes.includes(file.type)) {
+            setProfileError('Only PDF, DOC, and DOCX files are allowed');
+            return;
+        }
+
+        try {
+            // If there's an existing document, delete it first
+            if (profile?.document) {
+                const existingPath = `university_documents/${userid}/${profile.document.split('/').pop()}`;
+                
+                const { error: deleteError } = await supabase.storage
+                    .from('documents')
+                    .remove([existingPath]);
+
+                if (deleteError) {
+                    console.error('Error deleting old document:', deleteError);
+                    // Continue with upload even if delete fails
+                }
+            }
+
+            // Use original filename but in a user-specific directory to prevent conflicts
+            const filePath = `university_documents/${userid}/${file.name}`;
+
+            // Upload to Supabase Storage
+            const { data, error: uploadError } = await supabase.storage
+                .from('documents')
+                .upload(filePath, file);
+
+            if (uploadError) {
+                throw uploadError;
+            }
+
+            // Get the public URL
+            const publicUrl = supabase.storage
+                .from('documents')
+                .getPublicUrl(filePath).data.publicUrl;
+
+            console.log(publicUrl);
+
+            // Update state
+            setDocumentName(file.name);
+            setProfile(prev => {
+                if (!prev) return null;
+                return { ...prev, document: publicUrl };
+            });
+        } catch (error: any) {
+            console.error('Error uploading document:', error);
+            setProfileError(`Failed to upload document: ${error.message}`);
+        }
+    };
 
     const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -419,6 +489,7 @@ const Sponsorships = () => {
         }
     };
 
+
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -440,6 +511,7 @@ const Sponsorships = () => {
         };
         reader.readAsDataURL(file);
     };
+
 
     const saveProfile = async () => {
         if (!profile || !username) return;
@@ -470,6 +542,7 @@ const Sponsorships = () => {
                 social_media: profile.social_media || null,
                 address: profile.address || null,
                 logo: previewImage, // Use the previewImage state which contains the base64 string
+                document: profile.document || null, // Include document URL in profile data
                 is_complete: true,
                 updated_at: new Date().toISOString(),
                 id: localStorage.getItem('userid')
@@ -1354,6 +1427,64 @@ return (
                                             <p className="text-gray-400 text-sm mt-2">
                                                 Upload your university logo. Max size: 5MB. Recommended format: PNG or
                                                 JPEG with transparent background.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Document Upload Section */}
+                                <div>
+                                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                        <FileText className="w-5 h-5"/>
+                                        University Document
+                                    </h3>
+                                    <div className="flex flex-col md:flex-row gap-6 items-center">
+                                        <div className="flex-shrink-0">
+                                            {documentName ? (
+                                                <div className="relative">
+                                                    <div className="w-32 h-32 bg-white/5 border border-neon-green/20 rounded-lg flex items-center justify-center p-4">
+                                                        <FileText className="w-12 h-12 text-neon-green"/>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setDocumentName(null);
+                                                            setProfile(prev => prev ? { ...prev, document: null } : null);
+                                                        }}
+                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                                    >
+                                                        <X className="w-4 h-4"/>
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="w-32 h-32 bg-white/5 border border-neon-green/20 rounded-lg flex items-center justify-center">
+                                                    <FileText className="w-10 h-10 text-gray-400"/>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex-grow">
+                                            <input
+                                                type="file"
+                                                ref={documentInputRef}
+                                                onChange={handleDocumentUpload}
+                                                accept=".pdf,.doc,.docx"
+                                                className="hidden"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => documentInputRef.current?.click()}
+                                                className="px-4 py-2 bg-white/5 border border-neon-green/20 rounded-lg text-white hover:bg-white/10 transition-all flex items-center gap-2"
+                                            >
+                                                <Upload className="w-4 h-4"/>
+                                                {documentName ? 'Change Document' : 'Upload Document'}
+                                            </button>
+                                            {documentName && (
+                                                <p className="text-neon-green text-sm mt-2">
+                                                    Current document: {documentName}
+                                                </p>
+                                            )}
+                                            <p className="text-gray-400 text-sm mt-2">
+                                                Upload your university documents. Accepted formats: PDF, DOC, DOCX. Max size: 50MB.
                                             </p>
                                         </div>
                                     </div>
