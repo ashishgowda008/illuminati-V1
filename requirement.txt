@@ -59,11 +59,13 @@ update the photos/ names and update the yt link.
 
 update the links - yt, insta and linkdin
 
-------------
-
 add a pdf submit in uni sign up (50 mb limit) (mandatory)
 
 in admin panel add a button (download as csv) in approved sponcerships
+
+------------
+
+
 
 update admin and brand page to display the university doc url
 

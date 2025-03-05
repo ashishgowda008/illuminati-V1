@@ -71,6 +71,7 @@ interface UniversityProfile {
   };
   address: string;
   logo: string;
+  document?: string;
 }
 
 const SubmitSponsorship = () => {
@@ -1595,6 +1596,9 @@ const SubmitSponsorship = () => {
                                           <p><span className="text-gray-400">Website:</span> <a href={selectedUniversityProfile.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">{selectedUniversityProfile.website}</a></p>
                                           <p><span className="text-gray-400">Email:</span> {selectedUniversityProfile.contact_email}</p>
                                           <p><span className="text-gray-400">Phone:</span> {selectedUniversityProfile.contact_phone}</p>
+                                          {selectedUniversityProfile.document && (
+                                            <p><span className="text-gray-400">Document:</span> <a href={selectedUniversityProfile.document} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">View Document</a></p>
+                                          )}
                                         </div>
                                       </div>
                                       

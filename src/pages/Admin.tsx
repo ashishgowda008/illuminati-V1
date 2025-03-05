@@ -68,6 +68,8 @@ interface UniversitySponsorshipRequest {
   university_id: string | null;
   university_name: string | null;
   university_url: string | null;
+  university_logo: string | null;
+  university_document: string | null;
 }
 
 interface Credential {
@@ -226,15 +228,43 @@ const Admin = () => {
   const loadPendingUniversityRequests = async () => {
     try {
       console.log('Loading pending university requests');
-      const { data, error } = await supabase
+      
+      // First fetch the requests
+      const { data: requestsData, error: requestsError } = await supabase
         .from('sponsership_requests_university')
         .select('*')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      console.log('Pending university requests loaded:', data);
-      setPendingUniversityRequests(data || []);
+      if (requestsError) throw requestsError;
+
+      // Then fetch university profiles for these requests
+      const requests = requestsData || [];
+      const universityIds = requests.map(req => req.university_id).filter(Boolean);
+
+      if (universityIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('university_profiles')
+          .select('id, logo, document')
+          .in('id', universityIds);
+
+        if (profilesError) throw profilesError;
+
+        // Merge university profile data with requests
+        const enrichedRequests = requests.map(req => {
+          const profile = profilesData?.find(p => p.id === req.university_id);
+          return {
+            ...req,
+            university_logo: profile?.logo || null,
+            university_document: profile?.document || null
+          };
+        });
+
+        console.log('Pending university requests loaded:', enrichedRequests);
+        setPendingUniversityRequests(enrichedRequests);
+      } else {
+        setPendingUniversityRequests(requests);
+      }
     } catch (error) {
       console.error('Error loading pending university requests:', error);
     }
@@ -1131,9 +1161,35 @@ setApprovedSponsorships(approvedSponshorships);
                   </div>
 
                   <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white mb-2">{selectedUniversityRequest.university_name || "University"}</h3>
-                      <p className="text-gray-400">{selectedUniversityRequest.description || "No description provided"}</p>
+                    <div className="flex items-start gap-6">
+                      <div className="flex-shrink-0">
+                        {selectedUniversityRequest.university_logo ? (
+                          <img
+                            src={selectedUniversityRequest.university_logo}
+                            alt={`${selectedUniversityRequest.university_name} logo`}
+                            className="w-24 h-24 object-contain rounded-lg bg-white/5"
+                          />
+                        ) : (
+                          <div className="w-24 h-24 bg-white/5 rounded-lg flex items-center justify-center">
+                            <School className="w-12 h-12 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-grow">
+                        <h3 className="text-lg font-semibold text-white mb-2">{selectedUniversityRequest.university_name || "University"}</h3>
+                        <p className="text-gray-400 mb-4">{selectedUniversityRequest.description || "No description provided"}</p>
+                        {selectedUniversityRequest.university_document && (
+                          <a
+                            href={selectedUniversityRequest.university_document}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-neon-green/10 text-neon-green rounded-lg hover:bg-neon-green/20 transition-all text-sm"
+                          >
+                            <Download className="w-4 h-4" />
+                            View Document
+                          </a>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -1351,12 +1407,67 @@ setApprovedSponsorships(approvedSponshorships);
           <div className="bg-black/95 rounded-xl border border-neon-green/20 p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-white">Approved Sponsorships</h2>
-              <button
-                onClick={() => setShowApprovedSponsorshipsModal(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <XCircle className="w-6 h-6" />
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => {
+                    const headers = [
+                      'Title', 'Description', 'Amount', 'Requirements', 'Target Criteria',
+                      'Event Date', 'Category', 'Footfall', 'Deadline', 'Reviewer ID',
+                      'Review Date', 'Created At', 'Submitted By'
+                    ];
+                    
+                    const csvData = approvedSponsorships.map(sponsorship => [
+                      sponsorship.title,
+                      sponsorship.description,
+                      sponsorship.amount,
+                      sponsorship.requirements,
+                      sponsorship.target_criteria,
+                      new Date(sponsorship.event_date).toLocaleDateString(),
+                      sponsorship.event_category,
+                      sponsorship.expected_footfall,
+                      new Date(sponsorship.application_deadline).toLocaleDateString(),
+                      sponsorship.reviewer_id || '',
+                      sponsorship.review_date ? new Date(sponsorship.review_date).toLocaleString() : '',
+                      new Date(sponsorship.created_at).toLocaleString(),
+                      sponsorship.user_id
+                    ]);
+
+                    // Add headers to start of data
+                    csvData.unshift(headers);
+
+                    // Convert to CSV string, properly escaping fields
+                    const csvString = csvData.map(row =>
+                      row.map(field => {
+                        const stringField = String(field);
+                        return stringField.includes(',') || stringField.includes('\n') || stringField.includes('"')
+                          ? `"${stringField.replace(/"/g, '""')}"`
+                          : stringField;
+                      }).join(',')
+                    ).join('\n');
+
+                    // Create and trigger download
+                    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', `approved-sponsorships-${new Date().toISOString().split('T')[0]}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="p-2 rounded-lg border border-neon-green/20 text-white hover:bg-neon-green/5 transition-all"
+                  title="Download CSV"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setShowApprovedSponsorshipsModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
