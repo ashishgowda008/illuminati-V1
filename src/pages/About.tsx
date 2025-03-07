@@ -46,7 +46,7 @@ const About = () => {
     {
       name: "Amruth",
       role: "Co-Founder & CEO",
-      bio: "Passionate about bridging the gap between college events and brand partnerships. Previously worked with multiple startups in the education sector."
+      bio: "Passionate about bridging the gap between college events and brand partnerships."
     },
     {
       name: "Rahul",
@@ -101,7 +101,7 @@ const About = () => {
               <h2 className="text-2xl font-semibold text-white">Our Vision</h2>
             </div>
             <p className="text-gray-300">
-              To be the largest sponsorship marketplace for students and brands, revolutionizing how college events secure funding and partnerships.
+              To be the largest sponsorship marketplace for students and brands, revolutionizing how college events secure sponsorships and partnerships.
             </p>
           </motion.div>
 
