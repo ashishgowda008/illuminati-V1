@@ -92,6 +92,8 @@ const Footer = () => {
               </a>
             </div>
           </div>
+          <p>originalilluminatii@gmail.com</p>
+           <p>+91 8660161824 </p> 
         </div>
 
         {/* Copyright */}
