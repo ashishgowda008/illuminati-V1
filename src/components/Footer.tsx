@@ -91,9 +91,9 @@ const Footer = () => {
                 <Youtube className="w-5 h-5" />
               </a>
             </div>
-          </div>
-          <p>originalilluminatii@gmail.com</p>
+            <p>originalilluminatii@gmail.com</p>
            <p>+91 8660161824 </p> 
+          </div>
         </div>
 
         {/* Copyright */}
