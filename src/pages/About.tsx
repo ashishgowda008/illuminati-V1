@@ -55,7 +55,7 @@ const About = () => {
     },
     {
       name: "Utsav",
-      role: "CMO",
+      role: "Co-Founder & CMO",
       bio: "Leading the marketing and growth initiatives at Illuminatii."
     }
   ];
