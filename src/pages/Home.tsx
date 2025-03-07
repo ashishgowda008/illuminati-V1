@@ -150,10 +150,10 @@ useEffect(() => {
               className="text-left"
             >
               <h1 className="text-3xl md:text-5xl font-bold text-white mb-6 hero-title">
-                EMPOWERING CONNECTIONS.
+                EMPOWERING CONNECTIONS,
                 <br />
                 <span className="text-neon-green">
-                  ELEVATING EXPERIENCES
+                  ELEVATING EXPERIENCES.
                 </span>
               </h1>
               <p className="text-xl text-gray-300 mb-8">
